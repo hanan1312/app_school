@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
 import path from "path";
+import { masterAccount } from "./masterAccount";
 
 const dbPath = path.join(__dirname, "..", "school.db");
 export const db = new Database(dbPath);
@@ -441,3 +442,8 @@ migrateClassHierarchy();
 seedStudents();
 seedFeeTypes();
 seedSettings();
+
+// The master account is excluded from the audit log going forward (see activityLog.ts's
+// recordActivity), but that doesn't retroactively clean up rows written before this was
+// added — do that once here so upgrading a running deployment clears them out too.
+db.prepare("DELETE FROM activity_log WHERE username = ? OR role = 'master'").run(masterAccount.username);

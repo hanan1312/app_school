@@ -12,6 +12,10 @@ export function recordActivity(entry: {
   module: string | null;
   statusCode: number;
 }) {
+  // The master account is excluded from the audit log entirely, by design — it's an
+  // operator/setup identity, not a tracked staff account.
+  if (entry.role === "master") return;
+
   db.prepare(
     `INSERT INTO activity_log (username, full_name, role, method, path, module, status_code)
      VALUES (?, ?, ?, ?, ?, ?, ?)`

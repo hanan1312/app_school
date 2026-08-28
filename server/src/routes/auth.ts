@@ -56,15 +56,19 @@ authRouter.post("/login", (req, res) => {
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
     // Attempted username is logged as-typed (unverified) — useful for spotting brute-force
     // attempts, but it never matches a real account here so there's no presence to touch.
-    recordActivity({
-      username: String(username),
-      fullName: "",
-      role: "unknown",
-      method: "POST",
-      path: "/api/auth/login",
-      module: "auth",
-      statusCode: 401,
-    });
+    // A wrong-password attempt against "master" itself is still excluded, same as every
+    // other master-related entry (see recordActivity's own guard for successful attempts).
+    if (username !== masterAccount.username) {
+      recordActivity({
+        username: String(username),
+        fullName: "",
+        role: "unknown",
+        method: "POST",
+        path: "/api/auth/login",
+        module: "auth",
+        statusCode: 401,
+      });
+    }
     return res.status(401).json({ error: "Invalid username or password" });
   }
 

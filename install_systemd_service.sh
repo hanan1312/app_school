@@ -78,9 +78,13 @@ fi
 # Note: server/'s better-sqlite3 is a native addon; if no prebuilt binary matches this
 # machine's platform, npm install compiles it from source, which needs a C++ toolchain and
 # python3 (e.g. `apt install build-essential python3`) — install those first if this fails.
+# npm's own launcher starts with `#!/usr/bin/env node`, so running it needs `node` on PATH
+# at exec time — but the target user's ambient PATH (under plain `sudo -u`) doesn't include
+# a per-user nvm install the way the login shell used above to detect NODE_BIN did. Prepend
+# NODE_DIR explicitly so `env node` resolves instead of failing with "No such file or directory".
 for APP_DIR in "$SCRIPT_DIR/server" "$SCRIPT_DIR/client"; do
     echo "--> Installing dependencies in $APP_DIR (as $APP_USER)..."
-    sudo -u "$APP_USER" "$NPM_BIN" install --prefix "$APP_DIR"
+    sudo -u "$APP_USER" env "PATH=$NODE_DIR:$PATH" "$NPM_BIN" install --prefix "$APP_DIR"
 done
 
 # server/.env is gitignored (it holds JWT_SECRET and the admin login), so a fresh clone

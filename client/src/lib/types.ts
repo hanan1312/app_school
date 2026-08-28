@@ -6,6 +6,29 @@ export type User = {
   modules: string[];
 };
 
+export type PresenceEntry = {
+  username: string;
+  fullName: string;
+  role: string;
+  status: "online" | "idle" | "offline";
+  loginAt: string;
+  offlineAt: string | null;
+  sessionSeconds: number;
+  idleSeconds: number;
+};
+
+export type ActivityLogEntry = {
+  id: number;
+  username: string;
+  full_name: string;
+  role: string;
+  method: string;
+  path: string;
+  module: string | null;
+  status_code: number;
+  created_at: string;
+};
+
 export type ClassLeaf = {
   id: number;
   className: string;

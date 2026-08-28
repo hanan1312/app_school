@@ -1,6 +1,12 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, setSessionExpiredHandler } from "../lib/api";
 import type { User } from "../lib/types";
+
+// Matches the margins presence.ts sizes its offline threshold around — not imported directly
+// since client and server are separate bundles, just kept in step by convention.
+const HEARTBEAT_INTERVAL_MS = 20_000;
+const IDLE_AFTER_MS = 3 * 60_000;
+const ACTIVITY_EVENTS = ["mousemove", "keydown", "scroll", "click", "touchstart"] as const;
 
 type AuthContextValue = {
   user: User | null;
@@ -54,9 +60,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    const outgoingToken = token;
     setUser(null);
     setToken(null);
     localStorage.removeItem(STORAGE_KEY);
+    // Best-effort: if this fails (offline, server down) presence just self-corrects once
+    // heartbeats stop arriving (see presence.ts's stale-heartbeat reconciliation).
+    if (outgoingToken) api.logout(outgoingToken).catch(() => {});
   };
 
   useEffect(() => {
@@ -85,6 +95,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setBootstrapping(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Tracks real user activity (not just "tab is open") so the Control page's presence view
+  // can tell idle apart from online — reported to the server on each heartbeat rather than
+  // computed there, since the server has no visibility into mouse/keyboard events.
+  const lastActivityRef = useRef(Date.now());
+  useEffect(() => {
+    const markActive = () => {
+      lastActivityRef.current = Date.now();
+    };
+    ACTIVITY_EVENTS.forEach((evt) => window.addEventListener(evt, markActive, { passive: true }));
+    return () => ACTIVITY_EVENTS.forEach((evt) => window.removeEventListener(evt, markActive));
+  }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    const sendHeartbeat = () => {
+      const idle = Date.now() - lastActivityRef.current > IDLE_AFTER_MS;
+      api.heartbeat(token, idle).catch(() => {});
+    };
+    const interval = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [token]);
 
   const hasModule = (key: string) => user?.role === "admin" || Boolean(user?.modules?.includes(key));
 

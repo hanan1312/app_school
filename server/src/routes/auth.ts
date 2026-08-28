@@ -2,8 +2,10 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { db } from "../db";
 import { signToken, requireAuth, AuthedRequest } from "../auth";
-import { getUserModules, MODULE_KEYS } from "../permissions";
+import { getUserModules, getUserRole, MODULE_KEYS } from "../permissions";
 import { masterAccount } from "../masterAccount";
+import { touchPresenceOnLogin, recordLogout } from "../presence";
+import { recordActivity } from "../activityLog";
 
 export const authRouter = Router();
 
@@ -25,6 +27,16 @@ authRouter.post("/login", (req, res) => {
       full_name: masterAccount.fullName,
       role: "master",
     });
+    touchPresenceOnLogin({ username: masterAccount.username, fullName: masterAccount.fullName, role: "master" });
+    recordActivity({
+      username: masterAccount.username,
+      fullName: masterAccount.fullName,
+      role: "master",
+      method: "POST",
+      path: "/api/auth/login",
+      module: "auth",
+      statusCode: 200,
+    });
     return res.json({
       token,
       user: {
@@ -42,10 +54,31 @@ authRouter.post("/login", (req, res) => {
     | undefined;
 
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+    // Attempted username is logged as-typed (unverified) — useful for spotting brute-force
+    // attempts, but it never matches a real account here so there's no presence to touch.
+    recordActivity({
+      username: String(username),
+      fullName: "",
+      role: "unknown",
+      method: "POST",
+      path: "/api/auth/login",
+      module: "auth",
+      statusCode: 401,
+    });
     return res.status(401).json({ error: "Invalid username or password" });
   }
 
   const token = signToken({ id: user.id, username: user.username, full_name: user.full_name });
+  touchPresenceOnLogin({ username: user.username, fullName: user.full_name, role: user.role });
+  recordActivity({
+    username: user.username,
+    fullName: user.full_name,
+    role: user.role,
+    method: "POST",
+    path: "/api/auth/login",
+    module: "auth",
+    statusCode: 200,
+  });
   res.json({
     token,
     user: {
@@ -56,6 +89,20 @@ authRouter.post("/login", (req, res) => {
       modules: getUserModules(user.id, user.role),
     },
   });
+});
+
+authRouter.post("/logout", requireAuth, (req: AuthedRequest, res) => {
+  recordLogout(req.user!.username);
+  recordActivity({
+    username: req.user!.username,
+    fullName: req.user!.full_name,
+    role: req.user!.role ?? getUserRole(req.user!.id) ?? "unknown",
+    method: "POST",
+    path: "/api/auth/logout",
+    module: "auth",
+    statusCode: 204,
+  });
+  res.status(204).send();
 });
 
 authRouter.get("/me", requireAuth, (req: AuthedRequest, res) => {

@@ -16,10 +16,14 @@ import { settingsRouter } from "./routes/settings";
 import { attendanceRouter } from "./routes/attendance";
 import { admissionsRouter } from "./routes/admissions";
 import { permissionsRouter } from "./routes/permissions";
+import { presenceRouter } from "./routes/presence";
+import { activityRouter } from "./routes/activity";
+import { activityLogger } from "./activityLog";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(activityLogger);
 app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
@@ -36,6 +40,8 @@ app.use("/api/settings", settingsRouter);
 app.use("/api/attendance", attendanceRouter);
 app.use("/api/admissions", admissionsRouter);
 app.use("/api/permissions", permissionsRouter);
+app.use("/api/presence", presenceRouter);
+app.use("/api/activity", activityRouter);
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
 app.listen(PORT, () => {

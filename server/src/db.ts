@@ -177,6 +177,33 @@ db.exec(`
     FOREIGN KEY (student_id) REFERENCES students(id),
     FOREIGN KEY (fee_type_id) REFERENCES fee_types(id)
   );
+
+  CREATE TABLE IF NOT EXISTS activity_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    full_name TEXT NOT NULL,
+    role TEXT NOT NULL,
+    method TEXT NOT NULL,
+    path TEXT NOT NULL,
+    module TEXT,
+    status_code INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  -- Keyed by username (not a numeric user id) so the master account — which has no row in
+  -- the users table — can be tracked the same way as everyone else.
+  CREATE TABLE IF NOT EXISTS user_presence (
+    username TEXT PRIMARY KEY,
+    full_name TEXT NOT NULL,
+    role TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'offline',
+    login_at TEXT,
+    last_heartbeat_at TEXT,
+    last_active_at TEXT,
+    idle_since TEXT,
+    total_idle_seconds INTEGER NOT NULL DEFAULT 0,
+    offline_at TEXT
+  );
 `);
 
 const STUDENT_COLUMNS: [string, string][] = [

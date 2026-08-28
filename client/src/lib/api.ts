@@ -62,6 +62,17 @@ export const api = {
 
   getMe: (token: string) => request<{ user: import("./types").User }>("/auth/me", { token }),
 
+  logout: (token: string) => request<void>("/auth/logout", { method: "POST", token }),
+
+  heartbeat: (token: string, idle: boolean) =>
+    request<void>("/presence/heartbeat", { method: "POST", body: JSON.stringify({ idle }), token }),
+
+  getPresence: (token: string) =>
+    request<{ presence: import("./types").PresenceEntry[] }>("/presence", { token }),
+
+  getActivity: (token: string, limit = 200) =>
+    request<{ activity: import("./types").ActivityLogEntry[] }>(`/activity?limit=${limit}`, { token }),
+
   getUserPermissions: (token: string, userId: number) =>
     request<{ role: string; modules: string[] }>(`/permissions/${userId}`, { token }),
 

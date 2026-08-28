@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { db } from "../db";
 import { requireAuth, type AuthedRequest } from "../auth";
 import { requireModule, isAdminOrMaster } from "../permissions";
+import { masterAccount } from "../masterAccount";
 
 export const usersRouter = Router();
 usersRouter.use(requireModule("control"));
@@ -23,6 +24,10 @@ usersRouter.post("/", requireAuth, (req: AuthedRequest, res) => {
   const requestedRole = typeof b.role === "string" && b.role ? b.role : "staff";
   if (requestedRole === "admin" && !isAdminOrMaster(req)) {
     return res.status(403).json({ error: "Only an admin can grant the admin role" });
+  }
+
+  if (b.username === masterAccount.username) {
+    return res.status(409).json({ error: "That username is reserved for the master account" });
   }
 
   const existing = db.prepare("SELECT id FROM users WHERE username = ?").get(b.username);

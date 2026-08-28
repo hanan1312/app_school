@@ -72,16 +72,15 @@ if [ ! -x "$NPM_BIN" ]; then
     exit 1
 fi
 
-# Same auto-install idiom as a plain `npm install`, for each app — so this script is
-# self-contained on a fresh clone, no separate "run this other step first" to remember.
+# Always run install (not just when node_modules is entirely absent) — this script is meant
+# to be re-run after every `git pull`, and npm install is a fast no-op when nothing changed
+# but silently leaves new dependencies missing if we only installed on a from-scratch clone.
 # Note: server/'s better-sqlite3 is a native addon; if no prebuilt binary matches this
 # machine's platform, npm install compiles it from source, which needs a C++ toolchain and
 # python3 (e.g. `apt install build-essential python3`) — install those first if this fails.
 for APP_DIR in "$SCRIPT_DIR/server" "$SCRIPT_DIR/client"; do
-    if [ ! -d "$APP_DIR/node_modules" ]; then
-        echo "--> node_modules missing in $APP_DIR, installing dependencies (as $APP_USER)..."
-        sudo -u "$APP_USER" "$NPM_BIN" install --prefix "$APP_DIR"
-    fi
+    echo "--> Installing dependencies in $APP_DIR (as $APP_USER)..."
+    sudo -u "$APP_USER" "$NPM_BIN" install --prefix "$APP_DIR"
 done
 
 # server/.env is gitignored (it holds JWT_SECRET and the admin login), so a fresh clone

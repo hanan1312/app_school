@@ -46,6 +46,12 @@ export function recordHeartbeat(username: string, idle: boolean) {
     | PresenceRow
     | undefined;
   if (!row) return;
+
+  // 'offline' is terminal until the next real login (touchPresenceOnLogin) — a heartbeat
+  // arriving afterwards (a reconnecting tab, a lingering tab in another window after
+  // logout elsewhere) must not quietly resurrect the session on its own.
+  if (row.status === "offline") return;
+
   const now = nowIso();
 
   if (idle) {

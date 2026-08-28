@@ -72,20 +72,55 @@ if [ ! -x "$NPM_BIN" ]; then
     exit 1
 fi
 
+# server/'s better-sqlite3 is a native addon. When no prebuilt binary matches this machine
+# (seen on some arm64 hosts, e.g. Oracle Cloud's Ampere instances) npm install compiles it
+# from source, which needs a C++20-capable compiler — but the g++ that ships by default on
+# some Ubuntu base images (g++-9) is too old and fails with "unrecognized command line
+# option '-std=c++20'". Find the newest g++ already on the box that actually accepts
+# -std=c++20; if none does, install one via apt rather than letting the build fail partway
+# through (only for the server's install below — the client has no native deps).
+find_good_gxx() {
+    for candidate in $(ls -1 /usr/bin/g++-* 2>/dev/null | sort -Vr) $(command -v g++ 2>/dev/null); do
+        if echo 'int main(){}' | "$candidate" -std=c++20 -x c++ -o /dev/null - 2>/dev/null; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+SERVER_CXX="$(find_good_gxx || true)"
+if [ -z "$SERVER_CXX" ]; then
+    echo "--> No C++20-capable compiler found, installing a newer g++ via apt..."
+    apt-get update -qq
+    for v in 13 12 11 10; do
+        if apt-get install -y "g++-$v" >/dev/null 2>&1; then
+            SERVER_CXX="$(command -v "g++-$v")"
+            break
+        fi
+    done
+fi
+if [ -z "$SERVER_CXX" ]; then
+    echo "ERROR: couldn't find or install a C++20-capable g++ (needed to build server's native sqlite addon)." >&2
+    echo "Install one manually (e.g. sudo apt install g++-12) and re-run." >&2
+    exit 1
+fi
+SERVER_CC="${SERVER_CXX/g++/gcc}"
+echo "--> Using $SERVER_CXX to build server's native modules"
+
 # Always run install (not just when node_modules is entirely absent) — this script is meant
 # to be re-run after every `git pull`, and npm install is a fast no-op when nothing changed
 # but silently leaves new dependencies missing if we only installed on a from-scratch clone.
-# Note: server/'s better-sqlite3 is a native addon; if no prebuilt binary matches this
-# machine's platform, npm install compiles it from source, which needs a C++ toolchain and
-# python3 (e.g. `apt install build-essential python3`) — install those first if this fails.
+#
 # npm's own launcher starts with `#!/usr/bin/env node`, so running it needs `node` on PATH
 # at exec time — but the target user's ambient PATH (under plain `sudo -u`) doesn't include
 # a per-user nvm install the way the login shell used above to detect NODE_BIN did. Prepend
 # NODE_DIR explicitly so `env node` resolves instead of failing with "No such file or directory".
-for APP_DIR in "$SCRIPT_DIR/server" "$SCRIPT_DIR/client"; do
-    echo "--> Installing dependencies in $APP_DIR (as $APP_USER)..."
-    sudo -u "$APP_USER" env "PATH=$NODE_DIR:$PATH" "$NPM_BIN" install --prefix "$APP_DIR"
-done
+echo "--> Installing dependencies in $SCRIPT_DIR/server (as $APP_USER)..."
+sudo -u "$APP_USER" env "PATH=$NODE_DIR:$PATH" CXX="$SERVER_CXX" CC="$SERVER_CC" "$NPM_BIN" install --prefix "$SCRIPT_DIR/server"
+
+echo "--> Installing dependencies in $SCRIPT_DIR/client (as $APP_USER)..."
+sudo -u "$APP_USER" env "PATH=$NODE_DIR:$PATH" "$NPM_BIN" install --prefix "$SCRIPT_DIR/client"
 
 # server/.env is gitignored (it holds JWT_SECRET and the admin login), so a fresh clone
 # never has one. Create it from the checked-in template with a freshly generated secret —

@@ -92,17 +92,31 @@ find_good_gxx() {
 SERVER_CXX="$(find_good_gxx || true)"
 if [ -z "$SERVER_CXX" ]; then
     echo "--> No C++20-capable compiler found, installing a newer g++ via apt..."
-    apt-get update -qq
+    # Not `-qq`: that also swallows *error* output, which previously made a failed `apt-get
+    # update` (e.g. an unreachable/misconfigured repo) kill this script via `set -e` with no
+    # visible reason at all. Capture output ourselves instead so a failure is diagnosable.
+    if ! APT_UPDATE_OUT="$(apt-get update 2>&1)"; then
+        echo "ERROR: apt-get update failed:" >&2
+        echo "$APT_UPDATE_OUT" >&2
+        exit 1
+    fi
+    LAST_APT_ERR=""
     for v in 13 12 11 10; do
-        if apt-get install -y "g++-$v" >/dev/null 2>&1; then
+        if APT_INSTALL_OUT="$(apt-get install -y "g++-$v" 2>&1)"; then
             SERVER_CXX="$(command -v "g++-$v")"
             break
+        else
+            LAST_APT_ERR="$APT_INSTALL_OUT"
         fi
     done
 fi
 if [ -z "$SERVER_CXX" ]; then
     echo "ERROR: couldn't find or install a C++20-capable g++ (needed to build server's native sqlite addon)." >&2
-    echo "Install one manually (e.g. sudo apt install g++-12) and re-run." >&2
+    if [ -n "${LAST_APT_ERR:-}" ]; then
+        echo "Last apt-get install attempt failed with:" >&2
+        echo "$LAST_APT_ERR" >&2
+    fi
+    echo "Install one manually (e.g. sudo apt install g++-12 - enabling the 'universe' repo first if that's not found) and re-run." >&2
     exit 1
 fi
 SERVER_CC="${SERVER_CXX/g++/gcc}"

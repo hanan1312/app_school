@@ -1,4 +1,9 @@
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
+// Falls back to the page's own hostname (not a hardcoded "localhost") so the same build
+// works whether it's opened on the server itself or from another machine on the network -
+// VITE_API_URL/VITE_API_PORT can still override this for a reverse-proxied domain setup.
+const API_PORT = import.meta.env.VITE_API_PORT ?? "4000";
+const API_URL =
+  import.meta.env.VITE_API_URL ?? `${window.location.protocol}//${window.location.hostname}:${API_PORT}/api`;
 const ASSET_ORIGIN = API_URL.replace(/\/api\/?$/, "");
 
 export function assetUrl(path: string | null | undefined) {

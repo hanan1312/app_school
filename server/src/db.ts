@@ -1,5 +1,4 @@
 import Database from "better-sqlite3";
-import bcrypt from "bcryptjs";
 import path from "path";
 
 const dbPath = path.join(__dirname, "..", "school.db");
@@ -265,19 +264,6 @@ function migrateClassHierarchy() {
   }
 }
 
-function seedUsers() {
-  const count = (db.prepare("SELECT COUNT(*) as c FROM users").get() as { c: number }).c;
-  if (count > 0) return;
-
-  const username = process.env.ADMIN_USERNAME || "admin";
-  const password = process.env.ADMIN_PASSWORD || "admin123";
-  const hash = bcrypt.hashSync(password, 10);
-
-  db.prepare(
-    "INSERT INTO users (username, password_hash, full_name, role) VALUES (?, ?, ?, ?)"
-  ).run(username, hash, "Ahmed ElMogy", "admin");
-}
-
 type ClassSeed = { stage: string; level: string; sections: string[] };
 
 const CLASS_TREE: ClassSeed[] = [
@@ -423,7 +409,6 @@ function seedSettings() {
 
 migrateStudentsColumns();
 
-seedUsers();
 seedClasses();
 migrateClassHierarchy();
 seedStudents();

@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-only-secret-change-me";
 
-export type TokenPayload = { id: number; username: string; full_name: string };
+export type TokenPayload = { id: number; username: string; full_name: string; role?: string };
 export type AuthedRequest = Request & { user?: TokenPayload };
 
 export function signToken(payload: TokenPayload) {

@@ -174,7 +174,7 @@ export default function ControlPage() {
                     <td className="px-3 py-2.5 capitalize text-slate-500">{u.role}</td>
                     <td className="px-3 py-2.5">
                       <div className="flex justify-end gap-1">
-                        {me?.role === "admin" && (
+                        {(me?.role === "admin" || me?.role === "master") && (
                           <button
                             onClick={() => setManagingPermissions(u)}
                             className="rounded-lg p-1.5 text-slate-400 hover:bg-brand-50 hover:text-brand-600"

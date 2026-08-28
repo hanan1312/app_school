@@ -136,17 +136,24 @@ sudo -u "$APP_USER" env "PATH=$NODE_DIR:$PATH" CXX="$SERVER_CXX" CC="$SERVER_CC"
 echo "--> Installing dependencies in $SCRIPT_DIR/client (as $APP_USER)..."
 sudo -u "$APP_USER" env "PATH=$NODE_DIR:$PATH" "$NPM_BIN" install --prefix "$SCRIPT_DIR/client"
 
-# server/.env is gitignored (it holds JWT_SECRET and the admin login), so a fresh clone
-# never has one. Create it from the checked-in template with a freshly generated secret —
-# but only if it's missing, so re-running this script never rotates an existing deployment's
-# secret out from under already-issued logins.
+# server/.env is gitignored (it holds JWT_SECRET), so a fresh clone never has one. Create it
+# from the checked-in template with a freshly generated secret — but only if it's missing, so
+# re-running this script never rotates an existing deployment's secret out from under
+# already-issued logins.
 if [ ! -f "$SCRIPT_DIR/server/.env" ]; then
     echo "--> server/.env missing, creating one from .env.example with a random JWT secret..."
     JWT_SECRET="$(openssl rand -hex 32)"
     sed "s/^JWT_SECRET=.*/JWT_SECRET=$JWT_SECRET/" "$SCRIPT_DIR/server/.env.example" > "$SCRIPT_DIR/server/.env"
     chown "$APP_USER":"$APP_USER" "$SCRIPT_DIR/server/.env"
-    echo "    Admin login will be ADMIN_USERNAME=admin / ADMIN_PASSWORD=change-me (from .env.example)."
-    echo "    Edit $SCRIPT_DIR/server/.env to set a real password, then: sudo systemctl restart app_school_api"
+fi
+
+# server/master-account.json (also gitignored) is created by the server itself on first boot
+# from server/master-account.example.json's defaults if it doesn't exist yet — same
+# don't-touch-it-if-present idempotency, handled in src/masterAccount.ts rather than here
+# since it needs to happen the same way for a plain `npm run dev` too, not just this script.
+if [ ! -f "$SCRIPT_DIR/server/master-account.json" ]; then
+    echo "    First boot will create server/master-account.json with username 'master' / password 'change-me'."
+    echo "    Edit that file to set a real password, then: sudo systemctl restart app_school_api"
 fi
 
 echo "========================================"

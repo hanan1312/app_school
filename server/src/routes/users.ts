@@ -2,7 +2,7 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { db } from "../db";
 import { requireAuth, type AuthedRequest } from "../auth";
-import { requireModule, getUserRole } from "../permissions";
+import { requireModule, isAdminOrMaster } from "../permissions";
 
 export const usersRouter = Router();
 usersRouter.use(requireModule("control"));
@@ -21,7 +21,7 @@ usersRouter.post("/", requireAuth, (req: AuthedRequest, res) => {
   }
 
   const requestedRole = typeof b.role === "string" && b.role ? b.role : "staff";
-  if (requestedRole === "admin" && getUserRole(req.user!.id) !== "admin") {
+  if (requestedRole === "admin" && !isAdminOrMaster(req)) {
     return res.status(403).json({ error: "Only an admin can grant the admin role" });
   }
 
@@ -42,14 +42,14 @@ usersRouter.put("/:id", requireAuth, (req: AuthedRequest, res) => {
   const existing = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as any;
   if (!existing) return res.status(404).json({ error: "User not found" });
 
-  const requesterRole = getUserRole(req.user!.id);
-  if (existing.role === "admin" && requesterRole !== "admin") {
+  const requesterIsPrivileged = isAdminOrMaster(req);
+  if (existing.role === "admin" && !requesterIsPrivileged) {
     return res.status(403).json({ error: "Only an admin can edit an admin account" });
   }
 
   const b = req.body ?? {};
   const requestedRole = typeof b.role === "string" && b.role ? b.role : existing.role;
-  if (requestedRole === "admin" && requesterRole !== "admin") {
+  if (requestedRole === "admin" && !requesterIsPrivileged) {
     return res.status(403).json({ error: "Only an admin can grant the admin role" });
   }
 
@@ -75,7 +75,7 @@ usersRouter.delete("/:id", requireAuth, (req: AuthedRequest, res) => {
   const target = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as any;
   if (!target) return res.status(404).json({ error: "User not found" });
 
-  if (target.role === "admin" && getUserRole(req.user!.id) !== "admin") {
+  if (target.role === "admin" && !isAdminOrMaster(req)) {
     return res.status(403).json({ error: "Only an admin can delete an admin account" });
   }
 

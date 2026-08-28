@@ -8,3 +8,4 @@ build/
 server/school.db
 server/school.db-shm
 server/school.db-wal
+server/master-account.json

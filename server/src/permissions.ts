@@ -6,6 +6,7 @@ export const MODULE_KEYS = [
   "students",
   "finance",
   "control",
+  "controlPanel",
   "inventory",
   "timetable",
   "buses",

@@ -10,6 +10,7 @@ import FinancePage from "./pages/FinancePage";
 import TimeTablePage from "./pages/TimeTablePage";
 import BusesPage from "./pages/BusesPage";
 import InventoryPage from "./pages/InventoryPage";
+import UsersPage from "./pages/UsersPage";
 import ControlPage from "./pages/ControlPage";
 import ManagementPage from "./pages/ManagementPage";
 import ConfigurationPage from "./pages/ConfigurationPage";
@@ -38,7 +39,7 @@ function RequireModule({ moduleKey, children }: { moduleKey: string; children: R
           <ShieldOff size={22} />
         </span>
         <p className="text-sm font-medium text-slate-600">You don't have access to this module.</p>
-        <p className="text-xs text-slate-400">Ask an admin to grant you access from Control.</p>
+        <p className="text-xs text-slate-400">Ask an admin to grant you access from Users.</p>
       </div>
     );
   }
@@ -93,9 +94,17 @@ export default function App() {
               }
             />
             <Route
-              path="control"
+              path="users"
               element={
                 <RequireModule moduleKey="control">
+                  <UsersPage />
+                </RequireModule>
+              }
+            />
+            <Route
+              path="control"
+              element={
+                <RequireModule moduleKey="controlPanel">
                   <ControlPage />
                 </RequireModule>
               }

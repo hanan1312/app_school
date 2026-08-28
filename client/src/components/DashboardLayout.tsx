@@ -46,7 +46,7 @@ export default function DashboardLayout() {
   const backgroundUrl = assetUrl(settings.background_url);
 
   const notify = (label: string) => {
-    setNotice(`You don't have access to "${label}". Ask an admin to grant it from Control.`);
+    setNotice(`You don't have access to "${label}". Ask an admin to grant it from Users.`);
     window.setTimeout(() => setNotice(null), 3200);
   };
 

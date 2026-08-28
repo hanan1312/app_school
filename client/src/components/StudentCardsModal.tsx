@@ -97,25 +97,25 @@ function IdCard({
             <p className="text-[7px] uppercase tracking-[0.25em] text-gold-400/70">Student ID Card</p>
           </div>
 
-          <div className="flex shrink-0 flex-col items-center gap-1">
-            <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-lg border-2 border-gold-400 bg-white">
-              {photoUrl ? (
-                <img src={photoUrl} alt={student.name} className="h-full w-full object-cover" />
-              ) : (
-                <User size={22} className="text-slate-300" />
-              )}
-            </div>
-            <div className="rounded bg-white p-0.5">
-              <QRCodeSVG value={idValue} size={40} />
-            </div>
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 border-gold-400 bg-white">
+            {photoUrl ? (
+              <img src={photoUrl} alt={student.name} className="h-full w-full object-cover" />
+            ) : (
+              <User size={22} className="text-slate-300" />
+            )}
           </div>
         </div>
 
-        <div className="space-y-1">
-          <CardField label="Name" value={student.name} />
-          <CardField label="Grade" value={student.section ?? ""} />
-          <CardField label="Class" value={className ?? student.division ?? ""} />
-          <CardField label="Id" value={idValue} />
+        <div className="flex items-end justify-between gap-2">
+          <div className="min-w-0 flex-1 space-y-1">
+            <CardField label="Name" value={student.name} />
+            <CardField label="Grade" value={student.section ?? ""} />
+            <CardField label="Class" value={className ?? student.division ?? ""} />
+            <CardField label="Id" value={idValue} />
+          </div>
+          <div className="shrink-0 rounded bg-white p-0.5">
+            <QRCodeSVG value={idValue} size={40} />
+          </div>
         </div>
       </div>
     </div>

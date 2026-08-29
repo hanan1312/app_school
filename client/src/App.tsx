@@ -13,7 +13,12 @@ import InventoryPage from "./pages/InventoryPage";
 import UsersPage from "./pages/UsersPage";
 import ControlPage from "./pages/ControlPage";
 import ManagementPage from "./pages/ManagementPage";
+import PreferencesPage from "./pages/PreferencesPage";
 import ConfigurationPage from "./pages/ConfigurationPage";
+import HrEmployeesPage from "./pages/hr/EmployeesPage";
+import HrPayrollPage from "./pages/hr/PayrollPage";
+import HrConfigurationPage from "./pages/hr/ConfigurationPage";
+import HrThemesPage from "./pages/hr/ThemesPage";
 import DashboardLayout from "./components/DashboardLayout";
 
 function ProtectedArea() {
@@ -118,10 +123,50 @@ export default function App() {
               }
             />
             <Route
-              path="configuration"
+              path="preferences"
               element={
                 <RequireModule moduleKey="configuration">
+                  <PreferencesPage />
+                </RequireModule>
+              }
+            />
+            <Route
+              path="configuration"
+              element={
+                <RequireModule moduleKey="configurationPanel">
                   <ConfigurationPage />
+                </RequireModule>
+              }
+            />
+            <Route
+              path="hr/employees"
+              element={
+                <RequireModule moduleKey="hrEmployees">
+                  <HrEmployeesPage />
+                </RequireModule>
+              }
+            />
+            <Route
+              path="hr/payroll"
+              element={
+                <RequireModule moduleKey="hrPayroll">
+                  <HrPayrollPage />
+                </RequireModule>
+              }
+            />
+            <Route
+              path="hr/configuration"
+              element={
+                <RequireModule moduleKey="hrConfiguration">
+                  <HrConfigurationPage />
+                </RequireModule>
+              }
+            />
+            <Route
+              path="hr/themes"
+              element={
+                <RequireModule moduleKey="hrThemes">
+                  <HrThemesPage />
                 </RequireModule>
               }
             />

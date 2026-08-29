@@ -5,8 +5,13 @@ import { useAuth } from "../context/AuthContext";
 import ClassTree from "./ClassTree";
 import { useSettings } from "../context/SettingsContext";
 import { assetUrl } from "../lib/api";
-import { MODULES } from "../lib/modules";
+import { MODULES, SECTIONS, type SectionKey } from "../lib/modules";
 import BackgroundWatermark from "./BackgroundWatermark";
+
+function sectionForPath(pathname: string): SectionKey {
+  const match = MODULES.find((m) => m.path === pathname || (m.path !== "/" && pathname.startsWith(m.path)));
+  return match?.section ?? "studentsAffair";
+}
 
 function useClock() {
   const [now, setNow] = useState(new Date());
@@ -40,6 +45,13 @@ export default function DashboardLayout() {
   const { settings } = useSettings();
   const { pathname } = useLocation();
   const [notice, setNotice] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<SectionKey>(() => sectionForPath(pathname));
+
+  useEffect(() => {
+    setActiveSection(sectionForPath(pathname));
+  }, [pathname]);
+
+  const sectionModules = MODULES.filter((m) => m.section === activeSection);
 
   const schoolName = settings.school_name || "SchoolSuite";
   const logoUrl = assetUrl(settings.logo_url);
@@ -90,8 +102,24 @@ export default function DashboardLayout() {
         </div>
       </header>
 
+      <div className="relative z-10 flex items-center gap-1 border-b border-slate-200 bg-slate-100/80 px-3 pt-1.5 backdrop-blur-sm">
+        {SECTIONS.map((s) => (
+          <button
+            key={s.key}
+            onClick={() => setActiveSection(s.key)}
+            className={`relative shrink-0 rounded-t-lg px-4 py-1.5 text-sm font-medium transition ${
+              activeSection === s.key
+                ? "bg-white text-brand-700 shadow-[0_-1px_0_rgba(15,23,42,0.04)]"
+                : "text-slate-500 hover:bg-white/60 hover:text-slate-700"
+            }`}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
       <nav className="relative z-10 flex items-center gap-1 overflow-x-auto border-b border-slate-200 bg-white/95 px-3 py-1.5 shadow-sm backdrop-blur-sm">
-        {MODULES.map((m) => {
+        {sectionModules.map((m) => {
           const Icon = m.icon;
           if (!hasModule(m.key)) {
             return (

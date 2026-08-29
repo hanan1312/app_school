@@ -12,6 +12,11 @@ export const MODULE_KEYS = [
   "buses",
   "management",
   "configuration",
+  "configurationPanel",
+  "hrEmployees",
+  "hrPayroll",
+  "hrConfiguration",
+  "hrThemes",
 ] as const;
 
 export type ModuleKey = (typeof MODULE_KEYS)[number];

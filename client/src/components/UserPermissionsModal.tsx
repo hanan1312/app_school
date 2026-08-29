@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { X, ShieldCheck, KeyRound } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { api, ApiError } from "../lib/api";
-import { MODULES } from "../lib/modules";
+import { MODULES, SECTIONS } from "../lib/modules";
 import type { SystemUser } from "../lib/types";
 
 type Props = {
@@ -77,28 +77,35 @@ export default function UserPermissionsModal({ targetUser, onClose }: Props) {
           ) : loading ? (
             <p className="py-6 text-center text-sm text-slate-400">Loading…</p>
           ) : (
-            <div className="space-y-1.5">
-              {MODULES.map((m) => {
-                const Icon = m.icon;
-                const checked = selected.has(m.key);
-                return (
-                  <label
-                    key={m.key}
-                    className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2 text-sm transition ${
-                      checked ? "border-brand-200 bg-brand-50/60 text-brand-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggle(m.key)}
-                      className="h-4 w-4 accent-brand-600"
-                    />
-                    <Icon size={15} className={checked ? "text-brand-600" : "text-slate-400"} />
-                    {m.label}
-                  </label>
-                );
-              })}
+            <div className="space-y-3">
+              {SECTIONS.map((s) => (
+                <div key={s.key} className="space-y-1.5">
+                  <p className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{s.label}</p>
+                  {MODULES.filter((m) => m.section === s.key).map((m) => {
+                    const Icon = m.icon;
+                    const checked = selected.has(m.key);
+                    return (
+                      <label
+                        key={m.key}
+                        className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2 text-sm transition ${
+                          checked
+                            ? "border-brand-200 bg-brand-50/60 text-brand-700"
+                            : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggle(m.key)}
+                          className="h-4 w-4 accent-brand-600"
+                        />
+                        <Icon size={15} className={checked ? "text-brand-600" : "text-slate-400"} />
+                        {m.label}
+                      </label>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           )}
 

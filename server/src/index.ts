@@ -18,6 +18,11 @@ import { admissionsRouter } from "./routes/admissions";
 import { permissionsRouter } from "./routes/permissions";
 import { presenceRouter } from "./routes/presence";
 import { activityRouter } from "./routes/activity";
+import { schoolsRouter } from "./routes/schools";
+import { hrEmployeesRouter } from "./routes/hrEmployees";
+import { hrAttendanceRouter } from "./routes/hrAttendance";
+import { hrLeaveRouter } from "./routes/hrLeave";
+import { hrConfigurationRouter } from "./routes/hrConfiguration";
 import { activityLogger } from "./activityLog";
 
 const app = express();
@@ -42,6 +47,11 @@ app.use("/api/admissions", admissionsRouter);
 app.use("/api/permissions", permissionsRouter);
 app.use("/api/presence", presenceRouter);
 app.use("/api/activity", activityRouter);
+app.use("/api/schools", schoolsRouter);
+app.use("/api/hr/employees", hrEmployeesRouter);
+app.use("/api/hr/attendance", hrAttendanceRouter);
+app.use("/api/hr/leave", hrLeaveRouter);
+app.use("/api/hr/configuration", hrConfigurationRouter);
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
 app.listen(PORT, () => {

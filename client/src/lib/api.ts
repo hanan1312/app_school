@@ -343,4 +343,213 @@ export const api = {
     request<{ admission: any }>(`/admissions/${id}/reject`, { method: "PUT", token }),
 
   deleteAdmission: (token: string, id: number) => request<void>(`/admissions/${id}`, { method: "DELETE", token }),
+
+  getSchools: (token: string) => request<{ schools: import("./types").School[] }>("/schools", { token }),
+
+  createSchool: (token: string, body: import("./types").SchoolInput) =>
+    request<{ school: import("./types").School }>("/schools", { method: "POST", body: JSON.stringify(body), token }),
+
+  updateSchool: (token: string, id: number, body: Partial<import("./types").SchoolInput>) =>
+    request<{ school: import("./types").School }>(`/schools/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+      token,
+    }),
+
+  deleteSchool: (token: string, id: number) => request<void>(`/schools/${id}`, { method: "DELETE", token }),
+
+  getHrEmployees: (token: string, params: { schoolId: number; q?: string }) => {
+    const search = new URLSearchParams({ schoolId: String(params.schoolId) });
+    if (params.q) search.set("q", params.q);
+    return request<{ employees: import("./types").HrEmployee[]; count: number }>(
+      `/hr/employees?${search.toString()}`,
+      { token }
+    );
+  },
+
+  createHrEmployee: (token: string, body: import("./types").HrEmployeeInput) =>
+    request<{ employee: import("./types").HrEmployee }>("/hr/employees", {
+      method: "POST",
+      body: JSON.stringify(body),
+      token,
+    }),
+
+  updateHrEmployee: (token: string, id: number, body: Partial<import("./types").HrEmployeeInput>) =>
+    request<{ employee: import("./types").HrEmployee }>(`/hr/employees/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+      token,
+    }),
+
+  deleteHrEmployee: (token: string, id: number) => request<void>(`/hr/employees/${id}`, { method: "DELETE", token }),
+
+  uploadHrEmployeePhoto: async (token: string, employeeId: number, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${API_URL}/hr/employees/${employeeId}/photo`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new ApiError(data.error ?? "Upload failed", res.status);
+    return data as { employee: import("./types").HrEmployee };
+  },
+
+  removeHrEmployeePhoto: (token: string, employeeId: number) =>
+    request<{ employee: import("./types").HrEmployee }>(`/hr/employees/${employeeId}/photo`, {
+      method: "DELETE",
+      token,
+    }),
+
+  getHrAttendance: (token: string, params: { schoolId: number; date: string }) =>
+    request<{ records: import("./types").HrAttendanceRecord[]; closed: boolean }>(
+      `/hr/attendance?schoolId=${params.schoolId}&date=${params.date}`,
+      { token }
+    ),
+
+  saveHrAttendanceBulk: (token: string, schoolId: number, date: string, entries: unknown[]) =>
+    request<{ ok: true; count: number }>("/hr/attendance/bulk", {
+      method: "POST",
+      body: JSON.stringify({ schoolId, date, entries }),
+      token,
+    }),
+
+  getHrAttendanceOverall: (token: string, params: { schoolId: number; from: string; to: string }) =>
+    request<{ rows: import("./types").HrOverallRow[] }>(
+      `/hr/attendance/overall?schoolId=${params.schoolId}&from=${params.from}&to=${params.to}`,
+      { token }
+    ),
+
+  getHrDaysClosed: (token: string, schoolId: number) =>
+    request<{ daysClosed: import("./types").HrDayClosed[] }>(`/hr/attendance/days-closed?schoolId=${schoolId}`, {
+      token,
+    }),
+
+  closeHrDay: (token: string, schoolId: number, date: string) =>
+    request<{ daysClosed: import("./types").HrDayClosed[] }>("/hr/attendance/days-closed", {
+      method: "POST",
+      body: JSON.stringify({ schoolId, date }),
+      token,
+    }),
+
+  reopenHrDay: (token: string, id: number) =>
+    request<void>(`/hr/attendance/days-closed/${id}`, { method: "DELETE", token }),
+
+  getHrLeaveLedger: (token: string, employeeId: number) =>
+    request<{ ledger: import("./types").HrLeaveEntry[] }>(`/hr/leave/${employeeId}`, { token }),
+
+  createHrLeaveEntry: (
+    token: string,
+    body: {
+      employeeId: number;
+      schoolId: number;
+      entryDate: string;
+      leaveTypeId: number;
+      kind: import("./types").HrLeaveKind;
+      leaveStart?: string;
+      leaveEnd?: string;
+      count?: number;
+    }
+  ) => request<{ entry: import("./types").HrLeaveEntry }>("/hr/leave", { method: "POST", body: JSON.stringify(body), token }),
+
+  deleteHrLeaveEntry: (token: string, id: number) => request<void>(`/hr/leave/${id}`, { method: "DELETE", token }),
+
+  getHrLookup: (token: string, category: import("./types").HrLookupCategory, schoolId?: number) =>
+    request<{ items: import("./types").HrLookupItem[] }>(
+      `/hr/configuration/lookup/${category}${schoolId ? `?schoolId=${schoolId}` : ""}`,
+      { token }
+    ),
+
+  createHrLookup: (
+    token: string,
+    body: { category: import("./types").HrLookupCategory; name: string; note?: string; schoolId?: number }
+  ) =>
+    request<{ item: import("./types").HrLookupItem }>("/hr/configuration/lookup", {
+      method: "POST",
+      body: JSON.stringify(body),
+      token,
+    }),
+
+  updateHrLookup: (token: string, id: number, body: { name?: string; note?: string }) =>
+    request<{ item: import("./types").HrLookupItem }>(`/hr/configuration/lookup/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+      token,
+    }),
+
+  deleteHrLookup: (token: string, id: number) =>
+    request<void>(`/hr/configuration/lookup/${id}`, { method: "DELETE", token }),
+
+  getHrValued: (token: string, category: import("./types").HrValuedCategory, schoolId?: number) =>
+    request<{ items: import("./types").HrValuedItem[] }>(
+      `/hr/configuration/valued/${category}${schoolId ? `?schoolId=${schoolId}` : ""}`,
+      { token }
+    ),
+
+  createHrValued: (
+    token: string,
+    body: {
+      category: import("./types").HrValuedCategory;
+      name: string;
+      amount?: number;
+      isPercentage?: boolean;
+      schoolId?: number;
+    }
+  ) =>
+    request<{ item: import("./types").HrValuedItem }>("/hr/configuration/valued", {
+      method: "POST",
+      body: JSON.stringify(body),
+      token,
+    }),
+
+  updateHrValued: (token: string, id: number, body: { name?: string; amount?: number; isPercentage?: boolean }) =>
+    request<{ item: import("./types").HrValuedItem }>(`/hr/configuration/valued/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+      token,
+    }),
+
+  deleteHrValued: (token: string, id: number) =>
+    request<void>(`/hr/configuration/valued/${id}`, { method: "DELETE", token }),
+
+  getHrShifts: (token: string, schoolId: number) =>
+    request<{ shifts: import("./types").HrShift[] }>(`/hr/configuration/shifts?schoolId=${schoolId}`, { token }),
+
+  createHrShift: (token: string, body: { schoolId: number; name: string; startTime?: string; endTime?: string }) =>
+    request<{ shift: import("./types").HrShift }>("/hr/configuration/shifts", {
+      method: "POST",
+      body: JSON.stringify(body),
+      token,
+    }),
+
+  updateHrShift: (token: string, id: number, body: { name?: string; startTime?: string; endTime?: string }) =>
+    request<{ shift: import("./types").HrShift }>(`/hr/configuration/shifts/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+      token,
+    }),
+
+  deleteHrShift: (token: string, id: number) =>
+    request<void>(`/hr/configuration/shifts/${id}`, { method: "DELETE", token }),
+
+  getHrHolidays: (token: string, schoolId: number) =>
+    request<{ holidays: import("./types").HrHoliday[] }>(`/hr/configuration/holidays?schoolId=${schoolId}`, { token }),
+
+  createHrHoliday: (token: string, body: { schoolId: number; name: string; date: string }) =>
+    request<{ holiday: import("./types").HrHoliday }>("/hr/configuration/holidays", {
+      method: "POST",
+      body: JSON.stringify(body),
+      token,
+    }),
+
+  updateHrHoliday: (token: string, id: number, body: { name?: string; date?: string }) =>
+    request<{ holiday: import("./types").HrHoliday }>(`/hr/configuration/holidays/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+      token,
+    }),
+
+  deleteHrHoliday: (token: string, id: number) =>
+    request<void>(`/hr/configuration/holidays/${id}`, { method: "DELETE", token }),
 };

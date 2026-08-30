@@ -4,6 +4,7 @@ import { ShieldOff } from "lucide-react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ClassesProvider } from "./context/ClassesContext";
 import { SettingsProvider } from "./context/SettingsContext";
+import { SchoolsProvider } from "./context/SchoolsContext";
 import LoginPage from "./pages/LoginPage";
 import StudentsPage from "./pages/StudentsPage";
 import FinancePage from "./pages/FinancePage";
@@ -29,7 +30,9 @@ function ProtectedArea() {
   return (
     <SettingsProvider>
       <ClassesProvider>
-        <DashboardLayout />
+        <SchoolsProvider>
+          <DashboardLayout />
+        </SchoolsProvider>
       </ClassesProvider>
     </SettingsProvider>
   );

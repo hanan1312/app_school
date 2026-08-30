@@ -331,3 +331,215 @@ export type AdmissionInput = {
   desiredClassId?: number;
   notes?: string;
 };
+
+export type School = {
+  id: number;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  governorate: string | null;
+  directorate: string | null;
+  logo_url: string | null;
+};
+
+export type SchoolInput = {
+  name: string;
+  address?: string;
+  phone?: string;
+  governorate?: string;
+  directorate?: string;
+};
+
+export type HrEmployee = {
+  id: number;
+  school_id: number;
+  name_ar: string;
+  name_en: string | null;
+  address: string | null;
+  country: string | null;
+  area: string | null;
+  tel1: string | null;
+  tel2: string | null;
+  registration_date: string | null;
+  birthday: string | null;
+  gender: "M" | "F";
+  religion: string | null;
+  nationality: string | null;
+  reg_code: string | null;
+  marital_status: string | null;
+  email: string | null;
+  handicap: number;
+  division: string | null;
+  section: string | null;
+  department: string | null;
+  job: string | null;
+  status: string | null;
+  shift: string | null;
+  contract_type: string | null;
+  contract_from: string | null;
+  contract_to: string | null;
+  education: string | null;
+  university: string | null;
+  id_number: string | null;
+  salary_method: "cash" | "bank";
+  medical_check: string | null;
+  bank1_name: string | null;
+  bank1_account: string | null;
+  bank2_name: string | null;
+  bank2_account: string | null;
+  union_name: string | null;
+  union_date: string | null;
+  insurance_number: string | null;
+  insured: number;
+  form1_date: string | null;
+  insured_with_another: number;
+  fellowship_box: number;
+  photo_url: string | null;
+};
+
+export type HrEmployeeInput = {
+  schoolId: number;
+  nameAr: string;
+  nameEn?: string;
+  address?: string;
+  country?: string;
+  area?: string;
+  tel1?: string;
+  tel2?: string;
+  registrationDate?: string;
+  birthday?: string;
+  gender: "M" | "F";
+  religion?: string;
+  nationality?: string;
+  regCode?: string;
+  maritalStatus?: string;
+  email?: string;
+  handicap?: boolean;
+  division?: string;
+  section?: string;
+  department?: string;
+  job?: string;
+  status?: string;
+  shift?: string;
+  contractType?: string;
+  contractFrom?: string;
+  contractTo?: string;
+  education?: string;
+  university?: string;
+  idNumber?: string;
+  salaryMethod?: "cash" | "bank";
+  medicalCheck?: string;
+  bank1Name?: string;
+  bank1Account?: string;
+  bank2Name?: string;
+  bank2Account?: string;
+  unionName?: string;
+  unionDate?: string;
+  insuranceNumber?: string;
+  insured?: boolean;
+  form1Date?: string;
+  insuredWithAnother?: boolean;
+  fellowshipBox?: boolean;
+};
+
+export type HrAttendanceStatus = "present" | "absent" | "late";
+
+export type HrAttendanceRecord = {
+  id: number | null;
+  employee_id: number;
+  name_ar: string;
+  job: string | null;
+  date: string | null;
+  status: HrAttendanceStatus | null;
+  check_in: string | null;
+  check_out: string | null;
+  note: string | null;
+};
+
+export type HrDayClosed = {
+  id: number;
+  school_id: number;
+  date: string;
+  closed_by: string | null;
+  closed_at: string;
+};
+
+export type HrOverallRow = {
+  employee_id: number;
+  employee_name: string;
+  present_count: number;
+  absent_count: number;
+  late_count: number;
+  marked_count: number;
+  attendance_rate: number | null;
+};
+
+export type HrLeaveKind = "opening_balance" | "leave";
+
+export type HrLeaveEntry = {
+  id: number;
+  employee_id: number;
+  school_id: number;
+  entry_date: string;
+  leave_type_id: number;
+  leave_type_name: string;
+  leave_start: string | null;
+  leave_end: string | null;
+  count: number;
+  kind: HrLeaveKind;
+};
+
+export type HrLookupCategory =
+  | "country"
+  | "area"
+  | "bank"
+  | "university"
+  | "education"
+  | "position"
+  | "division"
+  | "section"
+  | "department"
+  | "outside_employee"
+  | "message";
+
+export type HrLookupItem = {
+  id: number;
+  category: HrLookupCategory;
+  school_id: number | null;
+  name: string;
+  note: string | null;
+};
+
+export type HrValuedCategory =
+  | "allowance"
+  | "overtime"
+  | "reward"
+  | "misconduct"
+  | "benefit"
+  | "tax"
+  | "deduction"
+  | "leave_type";
+
+export type HrValuedItem = {
+  id: number;
+  category: HrValuedCategory;
+  school_id: number | null;
+  name: string;
+  amount: number;
+  is_percentage: number;
+};
+
+export type HrShift = {
+  id: number;
+  school_id: number;
+  name: string;
+  start_time: string | null;
+  end_time: string | null;
+};
+
+export type HrHoliday = {
+  id: number;
+  school_id: number;
+  name: string;
+  date: string;
+};

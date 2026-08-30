@@ -205,6 +205,155 @@ db.exec(`
     total_idle_seconds INTEGER NOT NULL DEFAULT 0,
     offline_at TEXT
   );
+
+  -- HR & Staff module. Scoped by school_id (unlike students/finance/etc., which stay
+  -- single-school) — see docs/claude.md for why the scoping boundary stops here.
+  CREATE TABLE IF NOT EXISTS schools (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    address TEXT,
+    phone TEXT,
+    governorate TEXT,
+    directorate TEXT,
+    logo_url TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  -- Backs the Configuration ribbon's "Payroll Setup" catalogs (Allowance, Over Time,
+  -- Rewards, Misconduct, Benefits, Tax, Deductions — a name + numeric amount/percentage)
+  -- plus "leave_type" (amount = annual entitlement days, backs "Leves Balance").
+  -- school_id NULL = shared across all schools; non-null = specific to one school.
+  CREATE TABLE IF NOT EXISTS hr_valued_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category TEXT NOT NULL,
+    school_id INTEGER,
+    name TEXT NOT NULL,
+    amount REAL NOT NULL DEFAULT 0,
+    is_percentage INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (school_id) REFERENCES schools(id)
+  );
+
+  -- Backs the Configuration ribbon's "Basic Data" catalogs (Country, Area, Banks,
+  -- Universities, Educations, Position, Division, Section, Department — pure name lists)
+  -- plus the per-school "Outside Employees" and "Message" (body text goes in "note").
+  CREATE TABLE IF NOT EXISTS hr_lookup_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category TEXT NOT NULL,
+    school_id INTEGER,
+    name TEXT NOT NULL,
+    note TEXT,
+    FOREIGN KEY (school_id) REFERENCES schools(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS hr_shifts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    school_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    start_time TEXT,
+    end_time TEXT,
+    FOREIGN KEY (school_id) REFERENCES schools(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS hr_official_holidays (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    school_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    date TEXT NOT NULL,
+    FOREIGN KEY (school_id) REFERENCES schools(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS hr_employees (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    school_id INTEGER NOT NULL,
+    name_ar TEXT NOT NULL,
+    name_en TEXT,
+    address TEXT,
+    country TEXT,
+    area TEXT,
+    tel1 TEXT,
+    tel2 TEXT,
+    registration_date TEXT,
+    birthday TEXT,
+    gender TEXT NOT NULL DEFAULT 'M',
+    religion TEXT,
+    nationality TEXT,
+    reg_code TEXT,
+    marital_status TEXT,
+    email TEXT,
+    handicap INTEGER NOT NULL DEFAULT 0,
+    division TEXT,
+    section TEXT,
+    department TEXT,
+    job TEXT,
+    status TEXT,
+    shift TEXT,
+    contract_type TEXT,
+    contract_from TEXT,
+    contract_to TEXT,
+    education TEXT,
+    university TEXT,
+    id_number TEXT,
+    salary_method TEXT NOT NULL DEFAULT 'cash',
+    medical_check TEXT,
+    bank1_name TEXT,
+    bank1_account TEXT,
+    bank2_name TEXT,
+    bank2_account TEXT,
+    union_name TEXT,
+    union_date TEXT,
+    insurance_number TEXT,
+    insured INTEGER NOT NULL DEFAULT 0,
+    form1_date TEXT,
+    insured_with_another INTEGER NOT NULL DEFAULT 0,
+    fellowship_box INTEGER NOT NULL DEFAULT 0,
+    photo_url TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (school_id) REFERENCES schools(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS hr_attendance (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id INTEGER NOT NULL,
+    school_id INTEGER NOT NULL,
+    date TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'present',
+    check_in TEXT,
+    check_out TEXT,
+    note TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES hr_employees(id),
+    FOREIGN KEY (school_id) REFERENCES schools(id),
+    UNIQUE(employee_id, date)
+  );
+
+  CREATE TABLE IF NOT EXISTS hr_attendance_days_closed (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    school_id INTEGER NOT NULL,
+    date TEXT NOT NULL,
+    closed_by TEXT,
+    closed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (school_id) REFERENCES schools(id),
+    UNIQUE(school_id, date)
+  );
+
+  -- The ledger IS the balance: current balance for (employee, leave_type) = SUM(count).
+  -- kind='opening_balance' rows carry no leave_start/leave_end; kind='leave' rows are an
+  -- actual leave request (negative count, dates filled) and print the official leave form.
+  CREATE TABLE IF NOT EXISTS hr_leave_ledger (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id INTEGER NOT NULL,
+    school_id INTEGER NOT NULL,
+    entry_date TEXT NOT NULL,
+    leave_type_id INTEGER NOT NULL,
+    leave_start TEXT,
+    leave_end TEXT,
+    count REAL NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'leave',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES hr_employees(id),
+    FOREIGN KEY (school_id) REFERENCES schools(id),
+    FOREIGN KEY (leave_type_id) REFERENCES hr_valued_items(id)
+  );
 `);
 
 const STUDENT_COLUMNS: [string, string][] = [
@@ -435,6 +584,23 @@ function seedSettings() {
   for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) insert.run(key, value);
 }
 
+// Seeds exactly one school from the existing single-school settings, so an existing
+// install starts with one school and behaves identically to today until a second one is
+// actually added.
+function seedSchools() {
+  const count = (db.prepare("SELECT COUNT(*) as c FROM schools").get() as { c: number }).c;
+  if (count > 0) return;
+
+  const rows = db.prepare("SELECT key, value FROM settings").all() as { key: string; value: string }[];
+  const settings = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+
+  db.prepare("INSERT INTO schools (name, address, phone) VALUES (?, ?, ?)").run(
+    settings.school_name ?? "My School",
+    settings.school_address ?? null,
+    settings.school_phone ?? null
+  );
+}
+
 migrateStudentsColumns();
 
 seedClasses();
@@ -442,6 +608,7 @@ migrateClassHierarchy();
 seedStudents();
 seedFeeTypes();
 seedSettings();
+seedSchools();
 
 // The master account is excluded from the audit log going forward (see activityLog.ts's
 // recordActivity), but that doesn't retroactively clean up rows written before this was

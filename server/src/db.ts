@@ -354,6 +354,52 @@ db.exec(`
     FOREIGN KEY (school_id) REFERENCES schools(id),
     FOREIGN KEY (leave_type_id) REFERENCES hr_valued_items(id)
   );
+
+  -- Payroll: a standing or one-off per-employee amount, covering every Additional/
+  -- Deduction/Tax button on the Payroll ribbon. Denormalized (label/amount/is_percentage
+  -- copied at assignment time from the chosen hr_valued_items row, or hand-entered) so a
+  -- later catalog-rate change never rewrites history.
+  CREATE TABLE IF NOT EXISTS hr_employee_salary_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id INTEGER NOT NULL,
+    school_id INTEGER NOT NULL,
+    category TEXT NOT NULL,
+    label TEXT NOT NULL,
+    amount REAL NOT NULL DEFAULT 0,
+    is_percentage INTEGER NOT NULL DEFAULT 0,
+    recurring INTEGER NOT NULL DEFAULT 1,
+    one_off_month TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES hr_employees(id),
+    FOREIGN KEY (school_id) REFERENCES schools(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS hr_payroll_periods (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    school_id INTEGER NOT NULL,
+    month TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (school_id) REFERENCES schools(id),
+    UNIQUE(school_id, month)
+  );
+
+  -- One row per employee per loaded period — a payslip snapshot, recomputed in place
+  -- (not appended) each time Load Salary is re-run for that month.
+  CREATE TABLE IF NOT EXISTS hr_payroll_lines (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    period_id INTEGER NOT NULL,
+    employee_id INTEGER NOT NULL,
+    basic_salary REAL NOT NULL,
+    additions_total REAL NOT NULL,
+    deductions_total REAL NOT NULL,
+    leave_deduction REAL NOT NULL,
+    tax_total REAL NOT NULL,
+    net_salary REAL NOT NULL,
+    generated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (period_id) REFERENCES hr_payroll_periods(id),
+    FOREIGN KEY (employee_id) REFERENCES hr_employees(id),
+    UNIQUE(period_id, employee_id)
+  );
 `);
 
 const STUDENT_COLUMNS: [string, string][] = [
@@ -399,6 +445,20 @@ function migrateStudentsColumns() {
   for (const [name, type] of STUDENT_COLUMNS) {
     if (!existing.includes(name)) {
       db.exec(`ALTER TABLE students ADD COLUMN ${name} ${type}`);
+    }
+  }
+}
+
+const HR_EMPLOYEE_COLUMNS: [string, string][] = [
+  ["insured_pension", "INTEGER NOT NULL DEFAULT 0"],
+  ["basic_salary", "REAL NOT NULL DEFAULT 0"],
+];
+
+function migrateHrEmployeesColumns() {
+  const existing = (db.prepare("PRAGMA table_info(hr_employees)").all() as { name: string }[]).map((c) => c.name);
+  for (const [name, type] of HR_EMPLOYEE_COLUMNS) {
+    if (!existing.includes(name)) {
+      db.exec(`ALTER TABLE hr_employees ADD COLUMN ${name} ${type}`);
     }
   }
 }
@@ -602,6 +662,7 @@ function seedSchools() {
 }
 
 migrateStudentsColumns();
+migrateHrEmployeesColumns();
 
 seedClasses();
 migrateClassHierarchy();

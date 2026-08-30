@@ -234,6 +234,7 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
   const [insured, setInsured] = useState(Boolean(initial?.insured));
   const [insuredWithAnother, setInsuredWithAnother] = useState(Boolean(initial?.insured_with_another));
   const [fellowshipBox, setFellowshipBox] = useState(Boolean(initial?.fellowship_box));
+  const [insuredPension, setInsuredPension] = useState(Boolean(initial?.insured_pension));
   const [photoUrl, setPhotoUrl] = useState<string | null>(initial?.photo_url ?? null);
   const [values, setValues] = useState<Record<TextKey, string>>(() => initialValues(initial));
   const [submitting, setSubmitting] = useState(false);
@@ -286,6 +287,7 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
         insured,
         insuredWithAnother,
         fellowshipBox,
+        insuredPension,
         nameEn: values.nameEn.trim() || undefined,
         address: values.address.trim() || undefined,
         country: values.country || undefined,
@@ -500,7 +502,7 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
                   ))}
                 </select>
               </Field>
-              <Field label="Job">
+              <Field label="مرحلة">
                 <select value={values.job} onChange={setField("job")} className={selectCls}>
                   <option value="">—</option>
                   {positions.map((p) => (
@@ -681,6 +683,15 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
                         className="h-4 w-4 accent-brand-600"
                       />
                       Fellowship Box
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-slate-600">
+                      <input
+                        type="checkbox"
+                        checked={insuredPension}
+                        onChange={(e) => setInsuredPension(e.target.checked)}
+                        className="h-4 w-4 accent-brand-600"
+                      />
+                      مؤمن بالمعاش
                     </label>
                   </div>
                 </Field>

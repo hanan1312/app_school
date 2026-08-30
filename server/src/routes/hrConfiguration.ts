@@ -29,6 +29,11 @@ const VALUED_CATEGORIES = [
   "tax",
   "deduction",
   "leave_type",
+  // Payroll-ribbon-only catalogs (no Configuration tile, per the reference app) — quick-pick
+  // sources for hr_employee_salary_items assignments, managed inline from that modal.
+  "incentive",
+  "teachers_club",
+  "increase",
 ] as const;
 
 function isLookupCategory(value: string): value is (typeof LOOKUP_CATEGORIES)[number] {

@@ -85,6 +85,7 @@ const COLUMNS = [
   "form1_date",
   "insured_with_another",
   "fellowship_box",
+  "insured_pension",
 ] as const;
 
 function fromBody(b: Record<string, unknown>) {
@@ -131,6 +132,7 @@ function fromBody(b: Record<string, unknown>) {
     form1_date: b.form1Date ?? null,
     insured_with_another: b.insuredWithAnother ? 1 : 0,
     fellowship_box: b.fellowshipBox ? 1 : 0,
+    insured_pension: b.insuredPension ? 1 : 0,
   };
 }
 

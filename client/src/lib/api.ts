@@ -552,4 +552,64 @@ export const api = {
 
   deleteHrHoliday: (token: string, id: number) =>
     request<void>(`/hr/configuration/holidays/${id}`, { method: "DELETE", token }),
+
+  getHrSalaryItems: (token: string, employeeId: number, category?: import("./types").HrSalaryCategory) =>
+    request<{ items: import("./types").HrSalaryItem[] }>(
+      `/hr/payroll/salary-items?employeeId=${employeeId}${category ? `&category=${category}` : ""}`,
+      { token }
+    ),
+
+  createHrSalaryItem: (
+    token: string,
+    body: {
+      employeeId: number;
+      schoolId: number;
+      category: import("./types").HrSalaryCategory;
+      label: string;
+      amount: number;
+      isPercentage?: boolean;
+      recurring?: boolean;
+      oneOffMonth?: string;
+    }
+  ) =>
+    request<{ item: import("./types").HrSalaryItem }>("/hr/payroll/salary-items", {
+      method: "POST",
+      body: JSON.stringify(body),
+      token,
+    }),
+
+  deleteHrSalaryItem: (token: string, id: number) =>
+    request<void>(`/hr/payroll/salary-items/${id}`, { method: "DELETE", token }),
+
+  setHrBasicSalary: (token: string, employeeId: number, basicSalary: number) =>
+    request<{ employee: import("./types").HrEmployee }>(`/hr/payroll/basic-salary/${employeeId}`, {
+      method: "PUT",
+      body: JSON.stringify({ basicSalary }),
+      token,
+    }),
+
+  getHrLeaveSummary: (token: string, schoolId: number, month: string) =>
+    request<{ rows: import("./types").HrLeaveSummaryRow[] }>(
+      `/hr/payroll/leave-summary?schoolId=${schoolId}&month=${month}`,
+      { token }
+    ),
+
+  getHrPayrollPeriods: (token: string, schoolId: number) =>
+    request<{ periods: import("./types").HrPayrollPeriod[] }>(`/hr/payroll/periods?schoolId=${schoolId}`, { token }),
+
+  createHrPayrollPeriod: (token: string, schoolId: number, month: string) =>
+    request<{ period: import("./types").HrPayrollPeriod }>("/hr/payroll/periods", {
+      method: "POST",
+      body: JSON.stringify({ schoolId, month }),
+      token,
+    }),
+
+  loadHrPayroll: (token: string, periodId: number) =>
+    request<{ lines: import("./types").HrPayrollLine[] }>(`/hr/payroll/periods/${periodId}/load`, {
+      method: "POST",
+      token,
+    }),
+
+  getHrPayrollLines: (token: string, periodId: number) =>
+    request<{ lines: import("./types").HrPayrollLine[] }>(`/hr/payroll/periods/${periodId}/lines`, { token }),
 };

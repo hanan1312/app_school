@@ -394,6 +394,8 @@ export type HrEmployee = {
   form1_date: string | null;
   insured_with_another: number;
   fellowship_box: number;
+  insured_pension: number;
+  basic_salary: number;
   photo_url: string | null;
 };
 
@@ -440,6 +442,7 @@ export type HrEmployeeInput = {
   form1Date?: string;
   insuredWithAnother?: boolean;
   fellowshipBox?: boolean;
+  insuredPension?: boolean;
 };
 
 export type HrAttendanceStatus = "present" | "absent" | "late";
@@ -518,7 +521,10 @@ export type HrValuedCategory =
   | "benefit"
   | "tax"
   | "deduction"
-  | "leave_type";
+  | "leave_type"
+  | "incentive"
+  | "teachers_club"
+  | "increase";
 
 export type HrValuedItem = {
   id: number;
@@ -542,4 +548,52 @@ export type HrHoliday = {
   school_id: number;
   name: string;
   date: string;
+};
+
+export type HrSalaryCategory =
+  | "allowance"
+  | "reward"
+  | "benefit"
+  | "incentive"
+  | "teachers_club"
+  | "increase"
+  | "misconduct"
+  | "deduction"
+  | "tax";
+
+export type HrSalaryItem = {
+  id: number;
+  employee_id: number;
+  school_id: number;
+  category: HrSalaryCategory;
+  label: string;
+  amount: number;
+  is_percentage: number;
+  recurring: number;
+  one_off_month: string | null;
+};
+
+export type HrPayrollPeriod = {
+  id: number;
+  school_id: number;
+  month: string;
+};
+
+export type HrPayrollLine = {
+  id: number;
+  period_id: number;
+  employee_id: number;
+  employee_name: string;
+  basic_salary: number;
+  additions_total: number;
+  deductions_total: number;
+  leave_deduction: number;
+  tax_total: number;
+  net_salary: number;
+};
+
+export type HrLeaveSummaryRow = {
+  employee_id: number;
+  employee_name: string;
+  leave_days: number;
 };

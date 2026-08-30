@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { GraduationCap, LogOut } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import ClassTree from "./ClassTree";
+import HrEmployeeTree from "./hr/HrEmployeeTree";
 import { useSettings } from "../context/SettingsContext";
 import { assetUrl } from "../lib/api";
 import { MODULES, SECTIONS, type SectionKey } from "../lib/modules";
@@ -168,7 +169,7 @@ export default function DashboardLayout() {
 
       <div className="relative z-10 flex min-h-0 flex-1">
         <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white/95 shadow-sm md:block">
-          <ClassTree />
+          {activeSection === "hrStaff" ? <HrEmployeeTree /> : <ClassTree />}
         </aside>
 
         <main className="min-w-0 flex-1 overflow-y-auto">

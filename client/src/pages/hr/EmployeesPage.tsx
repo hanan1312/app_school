@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { UserPlus, Table2, CalendarCheck, ClipboardList, Building2, Search, Pencil, Trash2 } from "lucide-react";
+import { UserPlus, Table2, CalendarCheck, ClipboardList, Building2, Search, Pencil, Trash2, X } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useSchools } from "../../context/SchoolsContext";
+import { useHrEmployees, type HrTreeSelection } from "../../context/HrEmployeesContext";
 import { api, ApiError } from "../../lib/api";
 import type { HrEmployee, HrEmployeeInput } from "../../lib/types";
 import RibbonGroup from "../../components/RibbonGroup";
@@ -13,13 +14,19 @@ import SchoolsSwitcherModal from "../../components/hr/SchoolsSwitcherModal";
 
 type OutletCtx = { notify: (label: string) => void };
 
+function selectionLabel(selection: HrTreeSelection): string | null {
+  if (selection.type === "all") return null;
+  if (selection.type === "division") return selection.division;
+  if (selection.type === "section") return `${selection.division} / ${selection.section}`;
+  return `${selection.division} / ${selection.section} / ${selection.job}`;
+}
+
 export default function EmployeesPage() {
   useOutletContext<OutletCtx>();
   const { token } = useAuth();
-  const { schools, selectedSchoolId, selectedSchool } = useSchools();
+  const { schools, selectedSchool } = useSchools();
+  const { employees, filteredEmployees, selection, setSelection, loading, refresh } = useHrEmployees();
 
-  const [employees, setEmployees] = useState<HrEmployee[]>([]);
-  const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -32,48 +39,47 @@ export default function EmployeesPage() {
   const [schoolsOpen, setSchoolsOpen] = useState(false);
 
   useEffect(() => {
-    const id = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    const id = setTimeout(() => setDebouncedQuery(query.trim().toLowerCase()), 300);
     return () => clearTimeout(id);
   }, [query]);
 
-  const loadEmployees = async () => {
-    if (!token || !selectedSchoolId) return;
-    setLoading(true);
-    setErrorMsg(null);
-    try {
-      const res = await api.getHrEmployees(token, { schoolId: selectedSchoolId, q: debouncedQuery || undefined });
-      setEmployees(res.employees);
-    } catch (err) {
-      setErrorMsg(err instanceof ApiError ? err.message : "Could not load employees.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const visibleEmployees = useMemo(() => {
+    if (!debouncedQuery) return filteredEmployees;
+    return filteredEmployees.filter(
+      (e) =>
+        e.name_ar.toLowerCase().includes(debouncedQuery) ||
+        e.name_en?.toLowerCase().includes(debouncedQuery) ||
+        e.id_number?.toLowerCase().includes(debouncedQuery) ||
+        e.job?.toLowerCase().includes(debouncedQuery)
+    );
+  }, [filteredEmployees, debouncedQuery]);
 
-  useEffect(() => {
-    loadEmployees();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, selectedSchoolId, debouncedQuery]);
+  const scopeName = selectionLabel(selection);
 
   const handleCreate = async (input: HrEmployeeInput) => {
     if (!token) return;
     await api.createHrEmployee(token, input);
     setModalOpen(false);
-    await loadEmployees();
+    await refresh();
   };
 
   const handleUpdate = async (input: HrEmployeeInput) => {
     if (!token || !editing) return;
     await api.updateHrEmployee(token, editing.id, input);
     setEditing(null);
-    await loadEmployees();
+    await refresh();
   };
 
   const confirmDelete = async () => {
     if (!token || !pendingDelete) return;
-    await api.deleteHrEmployee(token, pendingDelete.id);
-    setPendingDelete(null);
-    await loadEmployees();
+    setErrorMsg(null);
+    try {
+      await api.deleteHrEmployee(token, pendingDelete.id);
+      setPendingDelete(null);
+      await refresh();
+    } catch (err) {
+      setErrorMsg(err instanceof ApiError ? err.message : "Could not delete this employee.");
+    }
   };
 
   return (
@@ -83,7 +89,7 @@ export default function EmployeesPage() {
           caption="Employees Management"
           buttons={[
             { label: "New Employee", icon: UserPlus, onClick: () => setModalOpen(true) },
-            { label: "Employees", icon: Table2, onClick: () => loadEmployees() },
+            { label: "Employees", icon: Table2, onClick: () => refresh() },
           ]}
         />
         <RibbonGroup
@@ -97,9 +103,18 @@ export default function EmployeesPage() {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
         <div className="flex items-center gap-2 text-sm text-slate-500">
           <span className="font-medium text-slate-700">{selectedSchool?.name ?? "No school selected"}</span>
+          {scopeName && (
+            <>
+              <span>/</span>
+              <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-medium text-brand-700">{scopeName}</span>
+              <button onClick={() => setSelection({ type: "all" })} className="text-slate-400 hover:text-slate-600" title="Clear filter">
+                <X size={14} />
+              </button>
+            </>
+          )}
           <span className="text-slate-300">&middot;</span>
           <span>
-            {employees.length} employee{employees.length === 1 ? "" : "s"}
+            {visibleEmployees.length} employee{visibleEmployees.length === 1 ? "" : "s"}
           </span>
           {schools.length > 1 && (
             <button onClick={() => setSchoolsOpen(true)} className="text-xs text-brand-600 hover:underline">
@@ -134,13 +149,13 @@ export default function EmployeesPage() {
                 <th className="px-3 py-2">Division</th>
                 <th className="px-3 py-2">Section</th>
                 <th className="px-3 py-2">Department</th>
-                <th className="px-3 py-2">Job</th>
+                <th className="px-3 py-2">مرحلة</th>
                 <th className="px-3 py-2">Status</th>
                 <th className="px-3 py-2" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {employees.map((e) => (
+              {visibleEmployees.map((e) => (
                 <tr key={e.id} className="hover:bg-slate-50">
                   <td className="px-3 py-2 text-slate-400">{e.id}</td>
                   <td className="px-3 py-2 font-medium text-slate-700">{e.name_ar}</td>
@@ -164,7 +179,7 @@ export default function EmployeesPage() {
                   </td>
                 </tr>
               ))}
-              {!loading && employees.length === 0 && (
+              {!loading && visibleEmployees.length === 0 && (
                 <tr>
                   <td colSpan={11} className="px-3 py-8 text-center text-slate-400">
                     No employees yet.

@@ -168,7 +168,7 @@ export default function DashboardLayout() {
       )}
 
       <div className="relative z-10 flex min-h-0 flex-1">
-        <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white/95 shadow-sm md:block">
+        <aside className="hidden w-80 shrink-0 border-r border-slate-200 bg-white/95 shadow-sm md:block">
           {activeSection === "hrStaff" ? <HrEmployeeTree /> : <ClassTree />}
         </aside>
 

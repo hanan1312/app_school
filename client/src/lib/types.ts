@@ -186,6 +186,8 @@ export type TimetableEntry = {
   end_time: string | null;
   subject: string;
   teacher_name: string | null;
+  subject_id: number | null;
+  teacher_id: number | null;
 };
 
 export type TimetableEntryInput = {
@@ -194,8 +196,71 @@ export type TimetableEntryInput = {
   periodNo: number;
   startTime?: string;
   endTime?: string;
-  subject: string;
+  subject?: string;
   teacherName?: string;
+  subjectId?: number | null;
+  teacherId?: number | null;
+};
+
+export type ConfigLookupCategory =
+  | "country"
+  | "nationality"
+  | "warning"
+  | "course"
+  | "area"
+  | "second_lang"
+  | "district"
+  | "education"
+  | "student_category"
+  | "expense_level"
+  | "revenue_level"
+  | "ministry";
+
+export type ConfigLookupItem = {
+  id: number;
+  category: ConfigLookupCategory;
+  name: string;
+  note: string | null;
+};
+
+export type Subject = {
+  id: number;
+  name: string;
+  color: string | null;
+  ig_subject: number;
+  weekly_periods: number;
+  price: number;
+  category: string | null;
+  level_ids: number[];
+};
+
+export type SubjectInput = {
+  name: string;
+  color?: string;
+  igSubject?: boolean;
+  weeklyPeriods?: number;
+  price?: number;
+  category?: string;
+  levelIds?: number[];
+};
+
+export type DailyPeriod = {
+  id: number;
+  period_no: number;
+  start_time: string;
+  end_time: string;
+};
+
+export type TimetableTeacher = {
+  employee_id: number;
+  name: string;
+  employee_status: string | null;
+  active: number;
+};
+
+export type ClassTimetableStatus = {
+  posted: boolean;
+  postedAt: string | null;
 };
 
 export type Bus = {

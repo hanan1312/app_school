@@ -178,6 +178,9 @@ export const api = {
   createFeeType: (token: string, body: unknown) =>
     request<{ feeType: any }>("/finance/fee-types", { method: "POST", body: JSON.stringify(body), token }),
 
+  updateFeeType: (token: string, id: number, body: unknown) =>
+    request<{ feeType: any }>(`/finance/fee-types/${id}`, { method: "PUT", body: JSON.stringify(body), token }),
+
   deleteFeeType: (token: string, id: number) =>
     request<void>(`/finance/fee-types/${id}`, { method: "DELETE", token }),
 
@@ -213,6 +216,90 @@ export const api = {
 
   deleteTimetableEntry: (token: string, id: number) =>
     request<void>(`/timetable/${id}`, { method: "DELETE", token }),
+
+  getDailyPeriods: (token: string) =>
+    request<{ periods: import("./types").DailyPeriod[] }>("/timetable/daily-periods", { token }),
+
+  createDailyPeriod: (token: string, body: { startTime: string; endTime: string }) =>
+    request<{ period: import("./types").DailyPeriod }>("/timetable/daily-periods", {
+      method: "POST",
+      body: JSON.stringify(body),
+      token,
+    }),
+
+  updateDailyPeriod: (token: string, id: number, body: { startTime?: string; endTime?: string }) =>
+    request<{ period: import("./types").DailyPeriod }>(`/timetable/daily-periods/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+      token,
+    }),
+
+  deleteDailyPeriod: (token: string, id: number) =>
+    request<void>(`/timetable/daily-periods/${id}`, { method: "DELETE", token }),
+
+  getTimetableTeachers: (token: string, q?: string) =>
+    request<{ teachers: import("./types").TimetableTeacher[] }>(
+      `/timetable/teachers${q ? `?q=${encodeURIComponent(q)}` : ""}`,
+      { token }
+    ),
+
+  setTimetableTeacherActive: (token: string, employeeId: number, active: boolean) =>
+    request<{ ok: true }>(`/timetable/teachers/${employeeId}/active`, {
+      method: "PUT",
+      body: JSON.stringify({ active }),
+      token,
+    }),
+
+  clearTimetableTeacherOverride: (token: string, employeeId: number) =>
+    request<{ ok: true }>(`/timetable/teachers/${employeeId}/active`, { method: "DELETE", token }),
+
+  getClassTimetableStatus: (token: string, classId: number) =>
+    request<import("./types").ClassTimetableStatus>(`/timetable/status/${classId}`, { token }),
+
+  toggleClassTimetablePost: (token: string, classId: number) =>
+    request<{ posted: boolean }>(`/timetable/status/${classId}/toggle`, { method: "POST", token }),
+
+  randomFillClassTimetable: (token: string, classId: number) =>
+    request<{ created: number }>(`/timetable/random/${classId}`, { method: "POST", token }),
+
+  getSubjects: (token: string, levelId?: number) =>
+    request<{ subjects: import("./types").Subject[] }>(`/subjects${levelId ? `?levelId=${levelId}` : ""}`, { token }),
+
+  createSubject: (token: string, body: import("./types").SubjectInput) =>
+    request<{ subject: import("./types").Subject }>("/subjects", {
+      method: "POST",
+      body: JSON.stringify(body),
+      token,
+    }),
+
+  updateSubject: (token: string, id: number, body: Partial<import("./types").SubjectInput>) =>
+    request<{ subject: import("./types").Subject }>(`/subjects/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+      token,
+    }),
+
+  deleteSubject: (token: string, id: number) => request<void>(`/subjects/${id}`, { method: "DELETE", token }),
+
+  getConfigLookup: (token: string, category: import("./types").ConfigLookupCategory) =>
+    request<{ items: import("./types").ConfigLookupItem[] }>(`/configuration/lookup/${category}`, { token }),
+
+  createConfigLookup: (token: string, body: { category: import("./types").ConfigLookupCategory; name: string; note?: string }) =>
+    request<{ item: import("./types").ConfigLookupItem }>("/configuration/lookup", {
+      method: "POST",
+      body: JSON.stringify(body),
+      token,
+    }),
+
+  updateConfigLookup: (token: string, id: number, body: { name?: string; note?: string }) =>
+    request<{ item: import("./types").ConfigLookupItem }>(`/configuration/lookup/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+      token,
+    }),
+
+  deleteConfigLookup: (token: string, id: number) =>
+    request<void>(`/configuration/lookup/${id}`, { method: "DELETE", token }),
 
   getBuses: (token: string) => request<{ buses: any[] }>("/buses", { token }),
 

@@ -549,6 +549,24 @@ function migrateHrEmployeesColumns() {
   }
 }
 
+// subject_id/teacher_id are additive: the older free-text subject/teacher_name columns stay
+// as the display fallback for entries created before the Classes's Time Table modal existed.
+const TIMETABLE_ENTRY_COLUMNS: [string, string][] = [
+  ["subject_id", "INTEGER REFERENCES subjects(id)"],
+  ["teacher_id", "INTEGER REFERENCES hr_employees(id)"],
+];
+
+function migrateTimetableEntryColumns() {
+  const existing = (db.prepare("PRAGMA table_info(timetable_entries)").all() as { name: string }[]).map(
+    (c) => c.name
+  );
+  for (const [name, type] of TIMETABLE_ENTRY_COLUMNS) {
+    if (!existing.includes(name)) {
+      db.exec(`ALTER TABLE timetable_entries ADD COLUMN ${name} ${type}`);
+    }
+  }
+}
+
 function migrateClassHierarchy() {
   const classColumns = (db.prepare("PRAGMA table_info(classes)").all() as { name: string }[]).map((c) => c.name);
   if (!classColumns.includes("level_id")) {
@@ -705,6 +723,27 @@ const FEE_TYPES: { name: string; amount: number }[] = [
   { name: "Activities", amount: 400 },
 ];
 
+// Matches the reference app's demo period strip (8:15, 9:00, 9:45, 10:30, 11:15, 11:30,
+// 12:00, 12:45) — a short break sits between periods 5 and 6.
+const DAILY_PERIODS: { start: string; end: string }[] = [
+  { start: "08:15", end: "09:00" },
+  { start: "09:00", end: "09:45" },
+  { start: "09:45", end: "10:30" },
+  { start: "10:30", end: "11:15" },
+  { start: "11:15", end: "11:30" },
+  { start: "11:30", end: "12:00" },
+  { start: "12:00", end: "12:45" },
+  { start: "12:45", end: "13:30" },
+];
+
+function seedDailyPeriods() {
+  const count = (db.prepare("SELECT COUNT(*) as c FROM daily_periods").get() as { c: number }).c;
+  if (count > 0) return;
+
+  const insert = db.prepare("INSERT INTO daily_periods (period_no, start_time, end_time) VALUES (?, ?, ?)");
+  DAILY_PERIODS.forEach((p, i) => insert.run(i + 1, p.start, p.end));
+}
+
 function seedFeeTypes() {
   const count = (db.prepare("SELECT COUNT(*) as c FROM fee_types").get() as { c: number }).c;
   if (count > 0) return;
@@ -796,11 +835,13 @@ export function seedHrOrgTree(schoolId: number) {
 
 migrateStudentsColumns();
 migrateHrEmployeesColumns();
+migrateTimetableEntryColumns();
 
 seedClasses();
 migrateClassHierarchy();
 seedStudents();
 seedFeeTypes();
+seedDailyPeriods();
 seedSettings();
 seedSchools();
 

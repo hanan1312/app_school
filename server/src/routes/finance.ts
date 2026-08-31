@@ -22,6 +22,22 @@ financeRouter.post("/fee-types", requireAuth, (req, res) => {
   res.status(201).json({ feeType });
 });
 
+financeRouter.put("/fee-types/:id", requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  const existing = db.prepare("SELECT * FROM fee_types WHERE id = ?").get(id) as any;
+  if (!existing) return res.status(404).json({ error: "Fee type not found" });
+
+  const b = req.body ?? {};
+  db.prepare("UPDATE fee_types SET name = ?, default_amount = ? WHERE id = ?").run(
+    b.name ?? existing.name,
+    b.defaultAmount ?? existing.default_amount,
+    id
+  );
+
+  const feeType = db.prepare("SELECT * FROM fee_types WHERE id = ?").get(id);
+  res.json({ feeType });
+});
+
 financeRouter.delete("/fee-types/:id", requireAuth, (req, res) => {
   const id = Number(req.params.id);
   const info = db.prepare("DELETE FROM fee_types WHERE id = ?").run(id);

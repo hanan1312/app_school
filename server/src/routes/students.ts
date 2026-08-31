@@ -90,8 +90,8 @@ studentsRouter.post("/", requireAuth, (req, res) => {
          status, status_date, father_name, father_national_id, father_mobile, father_job, father_education,
          father_company, father_email, mother_name, mother_national_id, mother_mobile, mother_job, mother_education,
          mother_company, mother_email, notes, medical_condition, education_authority, special_case, integrated,
-         uses_bus, emergency_name, emergency_tel, transferred_from)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         uses_bus, emergency_name, emergency_tel, transferred_from, transferred_in)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       maxSeq + 1,
@@ -140,7 +140,8 @@ studentsRouter.post("/", requireAuth, (req, res) => {
       boolToInt(b.usesBus),
       b.emergencyName ?? null,
       b.emergencyTel ?? null,
-      b.transferredFrom ?? null
+      b.transferredFrom ?? null,
+      b.transferredIn ?? null
     );
 
   const student = db.prepare("SELECT * FROM students WHERE id = ?").get(info.lastInsertRowid);
@@ -163,7 +164,7 @@ studentsRouter.put("/:id", requireAuth, (req, res) => {
       father_company = ?, father_email = ?, mother_name = ?, mother_national_id = ?,
       mother_mobile = ?, mother_job = ?, mother_education = ?, mother_company = ?, mother_email = ?,
       notes = ?, medical_condition = ?, education_authority = ?, special_case = ?, integrated = ?,
-      uses_bus = ?, emergency_name = ?, emergency_tel = ?, transferred_from = ?
+      uses_bus = ?, emergency_name = ?, emergency_tel = ?, transferred_from = ?, transferred_in = ?
      WHERE id = ?`
   ).run(
     b.gender ?? existing.gender,
@@ -212,6 +213,7 @@ studentsRouter.put("/:id", requireAuth, (req, res) => {
     b.emergencyName ?? existing.emergency_name,
     b.emergencyTel ?? existing.emergency_tel,
     b.transferredFrom ?? existing.transferred_from,
+    b.transferredIn ?? existing.transferred_in,
     id
   );
 

@@ -96,6 +96,7 @@ export type Student = {
   emergency_tel: string | null;
   photo_url: string | null;
   transferred_from: string | null;
+  transferred_in: string | null;
 };
 
 export type StudentInput = {
@@ -145,6 +146,7 @@ export type StudentInput = {
   emergencyName?: string;
   emergencyTel?: string;
   transferredFrom?: string;
+  transferredIn?: string;
 };
 
 export type FeeType = {

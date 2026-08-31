@@ -45,7 +45,8 @@ export type StudentColumnKey =
   | "special_case"
   | "integrated"
   | "uses_bus"
-  | "transferred_from";
+  | "transferred_from"
+  | "transferred_in";
 
 export type StudentColumnDef = {
   key: StudentColumnKey;
@@ -117,6 +118,7 @@ export const STUDENT_COLUMNS: StudentColumnDef[] = [
   { key: "integrated", label: "Integrated", defaultVisible: false, get: (s) => (s.integrated ? "Yes" : "No") },
   { key: "uses_bus", label: "Uses School Bus", defaultVisible: false, get: (s) => (s.uses_bus ? "Yes" : "No") },
   { key: "transferred_from", label: "Transferred From", defaultVisible: false, get: (s) => s.transferred_from ?? "" },
+  { key: "transferred_in", label: "Transferred In", defaultVisible: false, get: (s) => s.transferred_in ?? "" },
 ];
 
 export const DEFAULT_VISIBLE_COLUMNS: StudentColumnKey[] = STUDENT_COLUMNS.filter((c) => c.defaultVisible).map(

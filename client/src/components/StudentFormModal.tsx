@@ -392,6 +392,7 @@ const TEXT_KEYS = [
   "emergencyName",
   "emergencyTel",
   "transferredFrom",
+  "transferredIn",
 ] as const;
 
 type TextKey = (typeof TEXT_KEYS)[number];
@@ -435,6 +436,7 @@ const SNAKE_MAP: Record<TextKey, keyof Student> = {
   emergencyName: "emergency_name",
   emergencyTel: "emergency_tel",
   transferredFrom: "transferred_from",
+  transferredIn: "transferred_in",
 };
 
 function deriveFatherNameFromStudentName(fullName: string): string {
@@ -553,6 +555,7 @@ export default function StudentFormModal({ tree, initial, onClose, onSubmit }: P
         emergencyName: values.emergencyName.trim() || undefined,
         emergencyTel: values.emergencyTel.trim() || undefined,
         transferredFrom: values.transferredFrom || undefined,
+        transferredIn: values.transferredIn || undefined,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -738,8 +741,13 @@ export default function StudentFormModal({ tree, initial, onClose, onSubmit }: P
                           className={disabledInputCls}
                         />
                       </Field>
-                      <Field label="Transferred From" span={2}>
+                      <Field label="Transferred From">
                         <select value={values.transferredFrom} onChange={setField("transferredFrom")} className={inputCls}>
+                          <option value="">— None —</option>
+                        </select>
+                      </Field>
+                      <Field label="Transferred In">
+                        <select value={values.transferredIn} onChange={setField("transferredIn")} className={inputCls}>
                           <option value="">— None —</option>
                         </select>
                       </Field>

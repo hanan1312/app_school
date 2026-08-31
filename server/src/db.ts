@@ -426,6 +426,65 @@ db.exec(`
     FOREIGN KEY (employee_id) REFERENCES hr_employees(id),
     UNIQUE(period_id, employee_id)
   );
+
+  -- Generic name+note catalogs for the Student's Affair "Configuration" ribbon (Country,
+  -- Nationality, Warnings, Course, Area, Second Lang, District, Education, Category, Expense
+  -- Levels, Revenue Levels, Ministry) — single-school, unlike hr_lookup_items which is
+  -- per-school, since only HR & Staff has multi-school support (see seedHrOrgTree above).
+  CREATE TABLE IF NOT EXISTS config_lookup_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category TEXT NOT NULL,
+    name TEXT NOT NULL,
+    note TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  -- Curriculum subjects (Time Table > Subjects). weekly_periods is the "Section Count" /
+  -- weekly-periods target shown as "Target" in the Classes's Time Table subject panel.
+  CREATE TABLE IF NOT EXISTS subjects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    color TEXT,
+    ig_subject INTEGER NOT NULL DEFAULT 0,
+    weekly_periods INTEGER NOT NULL DEFAULT 0,
+    price REAL NOT NULL DEFAULT 0,
+    category TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS subject_levels (
+    subject_id INTEGER NOT NULL,
+    level_id INTEGER NOT NULL,
+    PRIMARY KEY (subject_id, level_id),
+    FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
+    FOREIGN KEY (level_id) REFERENCES levels(id) ON DELETE CASCADE
+  );
+
+  -- The Classes's Time Table modal's period-of-day column headers (Time Table > Daily Period).
+  CREATE TABLE IF NOT EXISTS daily_periods (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    period_no INTEGER NOT NULL UNIQUE,
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL
+  );
+
+  -- "Time Table Post" — once posted, a class's timetable can no longer be edited (same
+  -- closed/locked idea as hr_attendance_days_closed, applied per class instead of per date).
+  CREATE TABLE IF NOT EXISTS class_timetable_status (
+    class_id INTEGER PRIMARY KEY,
+    posted INTEGER NOT NULL DEFAULT 0,
+    posted_at TEXT,
+    FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE
+  );
+
+  -- Whether an HR employee (division = المدرسين) currently participates in timetable
+  -- scheduling — decoupled from their HR employment status so the Time Table > Teachers tile
+  -- can toggle/remove it without ever touching the HR employee record itself.
+  CREATE TABLE IF NOT EXISTS timetable_teacher_overrides (
+    employee_id INTEGER PRIMARY KEY,
+    active INTEGER NOT NULL DEFAULT 1,
+    FOREIGN KEY (employee_id) REFERENCES hr_employees(id) ON DELETE CASCADE
+  );
 `);
 
 const STUDENT_COLUMNS: [string, string][] = [
@@ -464,6 +523,7 @@ const STUDENT_COLUMNS: [string, string][] = [
   ["emergency_tel", "TEXT"],
   ["photo_url", "TEXT"],
   ["transferred_from", "TEXT"],
+  ["transferred_in", "TEXT"],
 ];
 
 function migrateStudentsColumns() {

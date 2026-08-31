@@ -353,14 +353,18 @@ export default function ClassTimetableModal({ initialClassId, onClose }: Props) 
                         </td>
                         {periods.map((p) => {
                           const entry = entryFor(day, p.period_no);
+                          const color = entry?.subject_id
+                            ? subjects.find((s) => s.id === entry.subject_id)?.color
+                            : null;
                           return (
                             <td key={p.id} className="px-1 py-1 align-top">
                               <button
                                 onClick={() => openCell(day, p.period_no)}
                                 disabled={posted}
-                                className={`h-12 w-full rounded-lg border px-1 text-[11px] transition ${
+                                style={entry && color ? { color } : undefined}
+                                className={`h-12 w-full rounded-lg border px-1 text-[11px] font-medium transition ${
                                   entry
-                                    ? "border-brand-200 bg-brand-50 text-brand-800 hover:border-brand-300"
+                                    ? `border-slate-200 bg-white hover:border-slate-300 ${color ? "" : "text-slate-700"}`
                                     : "border-dashed border-slate-200 text-slate-300 hover:border-brand-300 hover:text-brand-400"
                                 } disabled:cursor-not-allowed disabled:opacity-60`}
                               >

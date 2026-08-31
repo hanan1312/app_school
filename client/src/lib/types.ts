@@ -498,12 +498,26 @@ export type HrLookupCategory =
   | "bank"
   | "university"
   | "education"
-  | "position"
-  | "division"
-  | "section"
   | "department"
   | "outside_employee"
   | "message";
+
+export type HrOrgJob = {
+  id: number;
+  job: string;
+};
+
+export type HrOrgSection = {
+  id: number;
+  section: string;
+  jobs: HrOrgJob[];
+};
+
+export type HrOrgDivision = {
+  id: number;
+  division: string;
+  sections: HrOrgSection[];
+};
 
 export type HrLookupItem = {
   id: number;

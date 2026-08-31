@@ -6,7 +6,6 @@ import {
   Landmark,
   GraduationCap,
   BookOpen,
-  Briefcase,
   UserX,
   MessageSquare,
   Gift,
@@ -50,6 +49,8 @@ type ValuedTile = {
 };
 type Tile = LookupTile | ValuedTile;
 
+// Division/Section/Position (Job) are managed via the Employees sidebar tree instead of a
+// flat catalog here — see client/src/components/hr/HrEmployeeTree.tsx.
 const BASIC_DATA: LookupTile[] = [
   { kind: "lookup", category: "country", title: "Country", icon: Globe },
   { kind: "lookup", category: "area", title: "Area", icon: MapPin },
@@ -57,7 +58,6 @@ const BASIC_DATA: LookupTile[] = [
   { kind: "lookup", category: "university", title: "Universities", icon: GraduationCap },
   { kind: "lookup", category: "education", title: "Educations", icon: BookOpen },
   { kind: "lookup", category: "outside_employee", title: "Outside Employees", icon: UserX, perSchool: true },
-  { kind: "lookup", category: "position", title: "Position", icon: Briefcase },
   { kind: "lookup", category: "message", title: "Message", icon: MessageSquare, perSchool: true, withNote: true },
 ];
 

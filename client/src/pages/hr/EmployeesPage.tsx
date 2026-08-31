@@ -3,7 +3,8 @@ import { useOutletContext } from "react-router-dom";
 import { UserPlus, Table2, CalendarCheck, ClipboardList, Building2, Search, Pencil, Trash2, X } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useSchools } from "../../context/SchoolsContext";
-import { useHrEmployees, type HrTreeSelection } from "../../context/HrEmployeesContext";
+import { useHrEmployees } from "../../context/HrEmployeesContext";
+import { useHrOrg, type HrOrgSelection } from "../../context/HrOrgContext";
 import { api, ApiError } from "../../lib/api";
 import type { HrEmployee, HrEmployeeInput } from "../../lib/types";
 import RibbonGroup from "../../components/RibbonGroup";
@@ -14,18 +15,30 @@ import SchoolsSwitcherModal from "../../components/hr/SchoolsSwitcherModal";
 
 type OutletCtx = { notify: (label: string) => void };
 
-function selectionLabel(selection: HrTreeSelection): string | null {
+const UNSPECIFIED = "Unspecified";
+
+function selectionLabel(selection: HrOrgSelection): string | null {
   if (selection.type === "all") return null;
   if (selection.type === "division") return selection.division;
   if (selection.type === "section") return `${selection.division} / ${selection.section}`;
   return `${selection.division} / ${selection.section} / ${selection.job}`;
 }
 
+function matchesSelection(e: HrEmployee, selection: HrOrgSelection): boolean {
+  if (selection.type === "all") return true;
+  if ((e.division || UNSPECIFIED) !== selection.division) return false;
+  if (selection.type === "division") return true;
+  if ((e.section || UNSPECIFIED) !== selection.section) return false;
+  if (selection.type === "section") return true;
+  return (e.job || UNSPECIFIED) === selection.job;
+}
+
 export default function EmployeesPage() {
   useOutletContext<OutletCtx>();
   const { token } = useAuth();
   const { schools, selectedSchool } = useSchools();
-  const { employees, filteredEmployees, selection, setSelection, loading, refresh } = useHrEmployees();
+  const { employees, loading, refresh } = useHrEmployees();
+  const { selection, setSelection } = useHrOrg();
 
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -44,15 +57,16 @@ export default function EmployeesPage() {
   }, [query]);
 
   const visibleEmployees = useMemo(() => {
-    if (!debouncedQuery) return filteredEmployees;
-    return filteredEmployees.filter(
+    const scoped = employees.filter((e) => matchesSelection(e, selection));
+    if (!debouncedQuery) return scoped;
+    return scoped.filter(
       (e) =>
         e.name_ar.toLowerCase().includes(debouncedQuery) ||
         e.name_en?.toLowerCase().includes(debouncedQuery) ||
         e.id_number?.toLowerCase().includes(debouncedQuery) ||
         e.job?.toLowerCase().includes(debouncedQuery)
     );
-  }, [filteredEmployees, debouncedQuery]);
+  }, [employees, selection, debouncedQuery]);
 
   const scopeName = selectionLabel(selection);
 

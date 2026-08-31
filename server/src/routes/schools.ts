@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db } from "../db";
+import { db, seedHrOrgTree } from "../db";
 import { requireAuth } from "../auth";
 import { requireModule } from "../permissions";
 
@@ -20,6 +20,8 @@ schoolsRouter.post("/", requireAuth, requireModule("hrConfiguration"), (req, res
        VALUES (?, ?, ?, ?, ?, ?)`
     )
     .run(b.name, b.address ?? null, b.phone ?? null, b.governorate ?? null, b.directorate ?? null, b.logoUrl ?? null);
+
+  seedHrOrgTree(Number(info.lastInsertRowid));
 
   const school = db.prepare("SELECT * FROM schools WHERE id = ?").get(info.lastInsertRowid);
   res.status(201).json({ school });

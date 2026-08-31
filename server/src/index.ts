@@ -24,6 +24,7 @@ import { hrAttendanceRouter } from "./routes/hrAttendance";
 import { hrLeaveRouter } from "./routes/hrLeave";
 import { hrConfigurationRouter } from "./routes/hrConfiguration";
 import { hrPayrollRouter } from "./routes/hrPayroll";
+import { hrOrgRouter } from "./routes/hrOrg";
 import { activityLogger } from "./activityLog";
 
 const app = express();
@@ -54,6 +55,7 @@ app.use("/api/hr/attendance", hrAttendanceRouter);
 app.use("/api/hr/leave", hrLeaveRouter);
 app.use("/api/hr/configuration", hrConfigurationRouter);
 app.use("/api/hr/payroll", hrPayrollRouter);
+app.use("/api/hr/org", hrOrgRouter);
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
 app.listen(PORT, () => {

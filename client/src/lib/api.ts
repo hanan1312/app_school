@@ -612,4 +612,58 @@ export const api = {
 
   getHrPayrollLines: (token: string, periodId: number) =>
     request<{ lines: import("./types").HrPayrollLine[] }>(`/hr/payroll/periods/${periodId}/lines`, { token }),
+
+  getHrOrgTree: (token: string, schoolId: number) =>
+    request<{ tree: import("./types").HrOrgDivision[] }>(`/hr/org?schoolId=${schoolId}`, { token }),
+
+  createHrOrgDivision: (token: string, schoolId: number, name: string) =>
+    request<{ tree: import("./types").HrOrgDivision[] }>("/hr/org/divisions", {
+      method: "POST",
+      body: JSON.stringify({ schoolId, name }),
+      token,
+    }),
+
+  renameHrOrgDivision: (token: string, id: number, name: string) =>
+    request<{ tree: import("./types").HrOrgDivision[] }>(`/hr/org/divisions/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ name }),
+      token,
+    }),
+
+  deleteHrOrgDivision: (token: string, id: number) =>
+    request<{ tree: import("./types").HrOrgDivision[] }>(`/hr/org/divisions/${id}`, { method: "DELETE", token }),
+
+  createHrOrgSection: (token: string, divisionId: number, name: string) =>
+    request<{ tree: import("./types").HrOrgDivision[] }>(`/hr/org/divisions/${divisionId}/sections`, {
+      method: "POST",
+      body: JSON.stringify({ name }),
+      token,
+    }),
+
+  renameHrOrgSection: (token: string, id: number, name: string) =>
+    request<{ tree: import("./types").HrOrgDivision[] }>(`/hr/org/sections/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ name }),
+      token,
+    }),
+
+  deleteHrOrgSection: (token: string, id: number) =>
+    request<{ tree: import("./types").HrOrgDivision[] }>(`/hr/org/sections/${id}`, { method: "DELETE", token }),
+
+  createHrOrgJob: (token: string, sectionId: number, name: string) =>
+    request<{ tree: import("./types").HrOrgDivision[] }>(`/hr/org/sections/${sectionId}/jobs`, {
+      method: "POST",
+      body: JSON.stringify({ name }),
+      token,
+    }),
+
+  renameHrOrgJob: (token: string, id: number, name: string) =>
+    request<{ tree: import("./types").HrOrgDivision[] }>(`/hr/org/jobs/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ name }),
+      token,
+    }),
+
+  deleteHrOrgJob: (token: string, id: number) =>
+    request<{ tree: import("./types").HrOrgDivision[] }>(`/hr/org/jobs/${id}`, { method: "DELETE", token }),
 };

@@ -355,6 +355,32 @@ db.exec(`
     FOREIGN KEY (leave_type_id) REFERENCES hr_valued_items(id)
   );
 
+  -- Employee org hierarchy (Division > Section > Job), mirroring stages/levels/classes for
+  -- students — a real, manageable structure (not a flat catalog), scoped per school.
+  CREATE TABLE IF NOT EXISTS hr_org_divisions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    school_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    FOREIGN KEY (school_id) REFERENCES schools(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS hr_org_sections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    division_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    FOREIGN KEY (division_id) REFERENCES hr_org_divisions(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS hr_org_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    section_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    FOREIGN KEY (section_id) REFERENCES hr_org_sections(id)
+  );
+
   -- Payroll: a standing or one-off per-employee amount, covering every Additional/
   -- Deduction/Tax button on the Payroll ribbon. Denormalized (label/amount/is_percentage
   -- copied at assignment time from the chosen hr_valued_items row, or hand-entered) so a
@@ -654,11 +680,58 @@ function seedSchools() {
   const rows = db.prepare("SELECT key, value FROM settings").all() as { key: string; value: string }[];
   const settings = Object.fromEntries(rows.map((r) => [r.key, r.value]));
 
-  db.prepare("INSERT INTO schools (name, address, phone) VALUES (?, ?, ?)").run(
-    settings.school_name ?? "My School",
-    settings.school_address ?? null,
-    settings.school_phone ?? null
-  );
+  const info = db
+    .prepare("INSERT INTO schools (name, address, phone) VALUES (?, ?, ?)")
+    .run(settings.school_name ?? "My School", settings.school_address ?? null, settings.school_phone ?? null);
+
+  seedHrOrgTree(Number(info.lastInsertRowid));
+}
+
+type OrgSeed = { division: string; sections: { section: string; job: string }[] };
+
+const HR_ORG_TREE: OrgSeed[] = [
+  { division: "مدير المدرسة", sections: [{ section: "مدير إدارة المدرسة", job: "مدير إدارة المدرسة" }] },
+  {
+    division: "الوكلاء",
+    sections: [
+      { section: "وكيل المرحلة الثانوى", job: "وكيل ثانوى" },
+      { section: "وكيل المرحلة الاعدادى", job: "وكيل اعدادى" },
+      { section: "وكيل المرحلة الابتدائى", job: "وكيل ابتدائى" },
+      { section: "وكيل مرحلة رياض اطفال", job: "وكيل رياض اطفال" },
+    ],
+  },
+  {
+    division: "المدرسين",
+    sections: [
+      { section: "مادة التربية الدينية", job: "مدرس تربية دينية" },
+      { section: "مادة الرياضيات", job: "مدرس رياضيات" },
+      { section: "مادة العلوم", job: "مدرس علوم" },
+      { section: "مادة اللغة العربية", job: "مدرس لغة عربية" },
+      { section: "مادة اللغة الانجليزية", job: "مدرس لغة انجليزية" },
+      { section: "مادة اللغة الفرنسية", job: "مدرس لغة فرنسية" },
+      { section: "مادة احياء و جيولوجيا", job: "مدرس احياء و جيولوجيا" },
+      { section: "مادة اقتصاد", job: "مدرس اقتصاد" },
+      { section: "مادة تربية فنية", job: "مدرس تربية فنية" },
+    ],
+  },
+];
+
+// Seeds the reference school's default org structure (Division > Section > Job) for a
+// newly-created school, so there's something sensible to start editing from — exported so
+// server/src/routes/schools.ts can call it too when a new school is added.
+export function seedHrOrgTree(schoolId: number) {
+  const insertDivision = db.prepare("INSERT INTO hr_org_divisions (school_id, name, sort_order) VALUES (?, ?, ?)");
+  const insertSection = db.prepare("INSERT INTO hr_org_sections (division_id, name, sort_order) VALUES (?, ?, ?)");
+  const insertJob = db.prepare("INSERT INTO hr_org_jobs (section_id, name, sort_order) VALUES (?, ?, ?)");
+
+  HR_ORG_TREE.forEach((divisionSeed, divisionOrder) => {
+    const divisionInfo = insertDivision.run(schoolId, divisionSeed.division, divisionOrder);
+    const divisionId = Number(divisionInfo.lastInsertRowid);
+    divisionSeed.sections.forEach((sectionSeed, sectionOrder) => {
+      const sectionInfo = insertSection.run(divisionId, sectionSeed.section, sectionOrder);
+      insertJob.run(Number(sectionInfo.lastInsertRowid), sectionSeed.job, 0);
+    });
+  });
 }
 
 migrateStudentsColumns();
@@ -670,6 +743,16 @@ seedStudents();
 seedFeeTypes();
 seedSettings();
 seedSchools();
+
+// Backfills the default org tree for any school that predates this feature (created before
+// seedHrOrgTree existed) — a fresh school always gets one via seedSchools()/POST /schools,
+// this only catches schools that already existed.
+for (const school of db.prepare("SELECT id FROM schools").all() as { id: number }[]) {
+  const hasOrgTree = (
+    db.prepare("SELECT COUNT(*) as c FROM hr_org_divisions WHERE school_id = ?").get(school.id) as { c: number }
+  ).c;
+  if (!hasOrgTree) seedHrOrgTree(school.id);
+}
 
 // The master account is excluded from the audit log going forward (see activityLog.ts's
 // recordActivity), but that doesn't retroactively clean up rows written before this was

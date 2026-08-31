@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useSchools } from "../../context/SchoolsContext";
+import { useHrOrg } from "../../context/HrOrgContext";
 import { api, ApiError, assetUrl } from "../../lib/api";
 import type { HrEmployee, HrEmployeeInput, HrLookupItem, HrShift } from "../../lib/types";
 import { Section, Field, inputCls } from "../FormLayout";
@@ -242,13 +243,21 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
 
   const countries = useLookupOptions("country", selectedSchoolId);
   const areas = useLookupOptions("area", selectedSchoolId);
-  const divisions = useLookupOptions("division", selectedSchoolId);
-  const sections = useLookupOptions("section", selectedSchoolId);
   const departments = useLookupOptions("department", selectedSchoolId);
-  const positions = useLookupOptions("position", selectedSchoolId);
   const educations = useLookupOptions("education", selectedSchoolId);
   const universities = useLookupOptions("university", selectedSchoolId);
   const banks = useLookupOptions("bank", selectedSchoolId);
+
+  // Division/Section/مرحلة (Job) come from the manageable org tree (the Employees sidebar
+  // tree), not a flat catalog — a cascading pick, mirroring how a student's class hierarchy
+  // works.
+  const { tree: orgTree } = useHrOrg();
+  const orgDivision = orgTree.find((d) => d.division === values.division);
+  const orgSection = orgDivision?.sections.find((s) => s.section === values.section);
+
+  const setDivision = (e: ChangeEvent<HTMLSelectElement>) =>
+    setValues((v) => ({ ...v, division: e.target.value, section: "", job: "" }));
+  const setSection = (e: ChangeEvent<HTMLSelectElement>) => setValues((v) => ({ ...v, section: e.target.value, job: "" }));
 
   const { token } = useAuth();
   const [shifts, setShifts] = useState<HrShift[]>([]);
@@ -473,21 +482,21 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
           {tab === "position" && (
             <Section title="Position" icon={Briefcase}>
               <Field label="Division">
-                <select value={values.division} onChange={setField("division")} className={selectCls}>
+                <select value={values.division} onChange={setDivision} className={selectCls} dir="rtl">
                   <option value="">—</option>
-                  {divisions.map((d) => (
-                    <option key={d.id} value={d.name}>
-                      {d.name}
+                  {orgTree.map((d) => (
+                    <option key={d.id} value={d.division}>
+                      {d.division}
                     </option>
                   ))}
                 </select>
               </Field>
               <Field label="Section">
-                <select value={values.section} onChange={setField("section")} className={selectCls}>
+                <select value={values.section} onChange={setSection} className={selectCls} disabled={!orgDivision} dir="rtl">
                   <option value="">—</option>
-                  {sections.map((s) => (
-                    <option key={s.id} value={s.name}>
-                      {s.name}
+                  {orgDivision?.sections.map((s) => (
+                    <option key={s.id} value={s.section}>
+                      {s.section}
                     </option>
                   ))}
                 </select>
@@ -503,11 +512,11 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
                 </select>
               </Field>
               <Field label="مرحلة">
-                <select value={values.job} onChange={setField("job")} className={selectCls}>
+                <select value={values.job} onChange={setField("job")} className={selectCls} disabled={!orgSection} dir="rtl">
                   <option value="">—</option>
-                  {positions.map((p) => (
-                    <option key={p.id} value={p.name}>
-                      {p.name}
+                  {orgSection?.jobs.map((j) => (
+                    <option key={j.id} value={j.job}>
+                      {j.job}
                     </option>
                   ))}
                 </select>

@@ -6,15 +6,14 @@ import { requireModule } from "../permissions";
 export const hrConfigurationRouter = Router();
 hrConfigurationRouter.use(requireModule("hrConfiguration"));
 
+// "division"/"section"/"position" (Job) are managed via the real hr_org_* hierarchy
+// (server/src/routes/hrOrg.ts) instead of a flat catalog — see the Employees sidebar tree.
 const LOOKUP_CATEGORIES = [
   "country",
   "area",
   "bank",
   "university",
   "education",
-  "position",
-  "division",
-  "section",
   "department",
   "outside_employee",
   "message",

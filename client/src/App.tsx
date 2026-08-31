@@ -6,6 +6,7 @@ import { ClassesProvider } from "./context/ClassesContext";
 import { SettingsProvider } from "./context/SettingsContext";
 import { SchoolsProvider } from "./context/SchoolsContext";
 import { HrEmployeesProvider } from "./context/HrEmployeesContext";
+import { HrOrgProvider } from "./context/HrOrgContext";
 import LoginPage from "./pages/LoginPage";
 import StudentsPage from "./pages/StudentsPage";
 import FinancePage from "./pages/FinancePage";
@@ -32,9 +33,11 @@ function ProtectedArea() {
     <SettingsProvider>
       <ClassesProvider>
         <SchoolsProvider>
-          <HrEmployeesProvider>
-            <DashboardLayout />
-          </HrEmployeesProvider>
+          <HrOrgProvider>
+            <HrEmployeesProvider>
+              <DashboardLayout />
+            </HrEmployeesProvider>
+          </HrOrgProvider>
         </SchoolsProvider>
       </ClassesProvider>
     </SettingsProvider>

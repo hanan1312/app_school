@@ -175,7 +175,7 @@ timetableRouter.get("/teachers", requireAuth, (req, res) => {
 
   let sql = `
     SELECT hr_employees.id as employee_id, hr_employees.name_ar as name, hr_employees.status as employee_status,
-           hr_employees.section as section,
+           hr_employees.section as section, hr_employees.subject_id as subject_id,
            COALESCE(timetable_teacher_overrides.active, 1) as active
     FROM hr_employees
     LEFT JOIN timetable_teacher_overrides ON timetable_teacher_overrides.employee_id = hr_employees.id

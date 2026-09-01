@@ -256,6 +256,7 @@ export type TimetableTeacher = {
   name: string;
   employee_status: string | null;
   section: string | null;
+  subject_id: number | null;
   active: number;
 };
 
@@ -445,6 +446,7 @@ export type HrEmployee = {
   handicap: number;
   division: string | null;
   section: string | null;
+  subject_id: number | null;
   department: string | null;
   job: string | null;
   status: string | null;
@@ -493,6 +495,7 @@ export type HrEmployeeInput = {
   handicap?: boolean;
   division?: string;
   section?: string;
+  subjectId?: number;
   department?: string;
   job?: string;
   status?: string;

@@ -7,14 +7,6 @@ import type { DailyPeriod, Subject, TimetableEntry, TimetableTeacher } from "../
 
 const DAY_LABELS = ["الاحد", "الاثنين", "الثلاثاء", "الاربعاء", "الخميس"];
 
-// A teacher's HR "Section" (see EmployeeFormModal's Teachers-division special case) is
-// either the subject's name verbatim, or the org tree's seeded "مادة <subject>" form.
-function teachesSubject(teacherSection: string | null, subjectName: string): boolean {
-  if (!teacherSection) return false;
-  const normalized = teacherSection.replace(/^مادة\s+/, "").trim();
-  return normalized === subjectName.trim() || teacherSection.trim() === subjectName.trim();
-}
-
 type Props = {
   initialClassId?: number | null;
   onBack: () => void;
@@ -132,19 +124,19 @@ export default function ClassTimetableEditor({ initialClassId, onBack }: Props) 
     setCellTeacherId(existing?.teacher_id ?? "");
   };
 
-  // Strictly the teacher(s) whose HR Section matches the chosen subject — no subject picked
-  // yet shows everyone, but once one is, only that subject's teachers are selectable.
+  // Strictly the teacher(s) assigned to the chosen subject (hr_employees.subject_id, set from
+  // the Employee form's Section field) — no subject picked yet shows everyone, but once one
+  // is, only that subject's teachers are selectable. Matched by id, not by comparing section
+  // name strings, so it can't be thrown off by renames, casing, or Arabic/English spelling.
   const cellTeacherOptions = useMemo(() => {
-    const subjectName = subjects.find((s) => s.id === cellSubjectId)?.name;
-    if (!subjectName) return teachers;
-    return teachers.filter((t) => teachesSubject(t.section, subjectName));
-  }, [cellSubjectId, subjects, teachers]);
+    if (!cellSubjectId) return teachers;
+    return teachers.filter((t) => t.subject_id === cellSubjectId);
+  }, [cellSubjectId, teachers]);
 
   const chooseCellSubject = (subjectId: number | "") => {
     setCellSubjectId(subjectId);
-    const subjectName = subjects.find((s) => s.id === subjectId)?.name;
-    if (!subjectName || !cellTeacherId) return;
-    const matching = teachers.filter((t) => teachesSubject(t.section, subjectName));
+    if (!subjectId || !cellTeacherId) return;
+    const matching = teachers.filter((t) => t.subject_id === subjectId);
     if (!matching.some((t) => t.employee_id === cellTeacherId)) {
       setCellTeacherId("");
     }

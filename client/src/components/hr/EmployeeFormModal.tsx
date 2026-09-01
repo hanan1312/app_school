@@ -246,6 +246,7 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
   const [insuredPension, setInsuredPension] = useState(Boolean(initial?.insured_pension));
   const [photoUrl, setPhotoUrl] = useState<string | null>(initial?.photo_url ?? null);
   const [values, setValues] = useState<Record<TextKey, string>>(() => initialValues(initial));
+  const [teacherSubjectId, setTeacherSubjectId] = useState<number | "">(initial?.subject_id ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -259,10 +260,13 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
   // Division/Section/مرحلة (Job) come from the manageable org tree (the Employees sidebar
   // tree), not a flat catalog — a cascading pick, mirroring how a student's class hierarchy
   // works. For the Teachers division specifically, Section is instead sourced from the Time
-  // Table > Subjects catalog (see subjectOptions below), so assigning a teacher to a subject
-  // there and picking that same subject in the Classes's Time Table cell editor line up
-  // automatically. مرحلة still looks up the org tree's matching section (by name, stripping
-  // its "مادة " prefix) so it keeps working wherever a subject's name lines up with it.
+  // Table > Subjects catalog: picking one sets both values.section (the display name, so the
+  // sidebar tree's grouping/counts by section text keep working) and teacherSubjectId (the
+  // real subjects.id FK, persisted as hr_employees.subject_id) — the Classes's Time Table
+  // cell editor matches teachers to a subject by that id, not by comparing name strings, so
+  // renames/casing/Arabic-vs-English naming can never break the match. مرحلة still looks up
+  // the org tree's matching section (by name, stripping its "مادة " prefix) so it keeps
+  // working wherever a subject's name happens to line up with it.
   const isTeacherDivision = values.division === TEACHER_DIVISION;
   const { tree: orgTree } = useHrOrg();
   const orgDivision = orgTree.find((d) => d.division === values.division);
@@ -270,9 +274,17 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
     isTeacherDivision ? normalizeSectionName(s.section) === values.section.trim() : s.section === values.section
   );
 
-  const setDivision = (e: ChangeEvent<HTMLSelectElement>) =>
+  const setDivision = (e: ChangeEvent<HTMLSelectElement>) => {
     setValues((v) => ({ ...v, division: e.target.value, section: "", job: "" }));
+    setTeacherSubjectId("");
+  };
   const setSection = (e: ChangeEvent<HTMLSelectElement>) => setValues((v) => ({ ...v, section: e.target.value, job: "" }));
+  const setTeacherSubject = (e: ChangeEvent<HTMLSelectElement>) => {
+    const subjectId = e.target.value ? Number(e.target.value) : "";
+    setTeacherSubjectId(subjectId);
+    const subjectName = subjects.find((s) => s.id === subjectId)?.name ?? "";
+    setValues((v) => ({ ...v, section: subjectName, job: "" }));
+  };
 
   const { token } = useAuth();
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -336,6 +348,7 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
         email: values.email.trim() || undefined,
         division: values.division || undefined,
         section: values.section || undefined,
+        subjectId: teacherSubjectId || undefined,
         department: values.department || undefined,
         job: values.job || undefined,
         status: values.status || undefined,
@@ -516,20 +529,25 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
                 </select>
               </Field>
               <Field label="Section">
-                <select value={values.section} onChange={setSection} className={selectCls} disabled={!orgDivision} dir="rtl">
-                  <option value="">—</option>
-                  {isTeacherDivision
-                    ? subjects.map((s) => (
-                        <option key={s.id} value={s.name}>
-                          {s.name}
-                        </option>
-                      ))
-                    : orgDivision?.sections.map((s) => (
-                        <option key={s.id} value={s.section}>
-                          {s.section}
-                        </option>
-                      ))}
-                </select>
+                {isTeacherDivision ? (
+                  <select value={teacherSubjectId} onChange={setTeacherSubject} className={selectCls} disabled={!orgDivision} dir="rtl">
+                    <option value="">—</option>
+                    {subjects.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <select value={values.section} onChange={setSection} className={selectCls} disabled={!orgDivision} dir="rtl">
+                    <option value="">—</option>
+                    {orgDivision?.sections.map((s) => (
+                      <option key={s.id} value={s.section}>
+                        {s.section}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </Field>
               <Field label="Department">
                 <select value={values.department} onChange={setField("department")} className={selectCls}>

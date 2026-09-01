@@ -548,6 +548,7 @@ function migrateStudentsColumns() {
 const HR_EMPLOYEE_COLUMNS: [string, string][] = [
   ["insured_pension", "INTEGER NOT NULL DEFAULT 0"],
   ["basic_salary", "REAL NOT NULL DEFAULT 0"],
+  ["subject_id", "INTEGER REFERENCES subjects(id)"],
 ];
 
 function migrateHrEmployeesColumns() {

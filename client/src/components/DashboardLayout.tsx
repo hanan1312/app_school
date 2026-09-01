@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { GraduationCap, LogOut } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import ClassTree from "./ClassTree";
@@ -45,6 +45,7 @@ export default function DashboardLayout() {
   const { user, logout, hasModule } = useAuth();
   const { settings } = useSettings();
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const [notice, setNotice] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<SectionKey>(() => sectionForPath(pathname));
 
@@ -53,6 +54,17 @@ export default function DashboardLayout() {
   }, [pathname]);
 
   const sectionModules = MODULES.filter((m) => m.section === activeSection);
+
+  // A section tab is chrome, not a page by itself — switching it has to navigate into that
+  // section's first accessible module, otherwise the module-tab row, sidebar tree and section
+  // highlight all flip immediately (they just key off activeSection) while the actual page
+  // content underneath keeps rendering whatever route you were last on.
+  const goToSection = (key: SectionKey) => {
+    setActiveSection(key);
+    const target =
+      MODULES.find((m) => m.section === key && hasModule(m.key)) ?? MODULES.find((m) => m.section === key);
+    if (target) navigate(target.path);
+  };
 
   const schoolName = settings.school_name || "SchoolSuite";
   const logoUrl = assetUrl(settings.logo_url);
@@ -107,7 +119,7 @@ export default function DashboardLayout() {
         {SECTIONS.map((s) => (
           <button
             key={s.key}
-            onClick={() => setActiveSection(s.key)}
+            onClick={() => goToSection(s.key)}
             className={`relative shrink-0 rounded-t-lg px-4 py-1.5 text-sm font-medium transition ${
               activeSection === s.key
                 ? "bg-white text-brand-700 shadow-[0_-1px_0_rgba(15,23,42,0.04)]"

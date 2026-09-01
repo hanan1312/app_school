@@ -132,21 +132,20 @@ export default function ClassTimetableEditor({ initialClassId, onBack }: Props) 
     setCellTeacherId(existing?.teacher_id ?? "");
   };
 
-  // Only the teacher(s) whose HR Section matches the chosen subject — falling back to
-  // everyone when nobody's been assigned to that subject yet, so the picker never goes empty.
+  // Strictly the teacher(s) whose HR Section matches the chosen subject — no subject picked
+  // yet shows everyone, but once one is, only that subject's teachers are selectable.
   const cellTeacherOptions = useMemo(() => {
     const subjectName = subjects.find((s) => s.id === cellSubjectId)?.name;
     if (!subjectName) return teachers;
-    const matching = teachers.filter((t) => teachesSubject(t.section, subjectName));
-    return matching.length > 0 ? matching : teachers;
+    return teachers.filter((t) => teachesSubject(t.section, subjectName));
   }, [cellSubjectId, subjects, teachers]);
 
   const chooseCellSubject = (subjectId: number | "") => {
     setCellSubjectId(subjectId);
     const subjectName = subjects.find((s) => s.id === subjectId)?.name;
-    if (!subjectName) return;
+    if (!subjectName || !cellTeacherId) return;
     const matching = teachers.filter((t) => teachesSubject(t.section, subjectName));
-    if (matching.length > 0 && cellTeacherId && !matching.some((t) => t.employee_id === cellTeacherId)) {
+    if (!matching.some((t) => t.employee_id === cellTeacherId)) {
       setCellTeacherId("");
     }
   };
@@ -439,7 +438,7 @@ export default function ClassTimetableEditor({ initialClassId, onBack }: Props) 
                   <select
                     value={cellTeacherId}
                     onChange={(e) => setCellTeacherId(e.target.value ? Number(e.target.value) : "")}
-                    className={`${selectCls} mb-4`}
+                    className={selectCls}
                   >
                     <option value="">—</option>
                     {cellTeacherOptions.map((t) => (
@@ -448,7 +447,12 @@ export default function ClassTimetableEditor({ initialClassId, onBack }: Props) 
                       </option>
                     ))}
                   </select>
-                  <div className="flex items-center justify-between">
+                  {cellSubjectId && cellTeacherOptions.length === 0 && (
+                    <p className="mb-1 mt-1 text-[11px] text-amber-600">
+                      No teacher is assigned to this subject yet — set it from Employees &gt; Section.
+                    </p>
+                  )}
+                  <div className="mt-3 flex items-center justify-between">
                     <button onClick={removeCell} className="text-sm text-red-600 hover:underline">
                       Remove
                     </button>

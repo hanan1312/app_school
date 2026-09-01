@@ -255,6 +255,7 @@ export type TimetableTeacher = {
   employee_id: number;
   name: string;
   employee_status: string | null;
+  section: string | null;
   active: number;
 };
 

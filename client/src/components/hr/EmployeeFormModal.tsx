@@ -15,7 +15,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useSchools } from "../../context/SchoolsContext";
 import { useHrOrg } from "../../context/HrOrgContext";
 import { api, ApiError, assetUrl } from "../../lib/api";
-import type { HrEmployee, HrEmployeeInput, HrLookupItem, HrShift } from "../../lib/types";
+import type { HrEmployee, HrEmployeeInput, HrLookupItem, HrShift, Subject } from "../../lib/types";
 import { Section, Field, inputCls } from "../FormLayout";
 
 const TABS = [
@@ -101,6 +101,14 @@ const SNAKE_MAP: Record<TextKey, keyof HrEmployee> = {
   insuranceNumber: "insurance_number",
   form1Date: "form1_date",
 };
+
+// The seeded org tree's "Teachers" division (see server/src/db.ts's HR_ORG_TREE) — its
+// sections are named "مادة <subject>", one per subject-teaching group.
+const TEACHER_DIVISION = "المدرسين";
+
+function normalizeSectionName(name: string): string {
+  return name.replace(/^مادة\s+/, "").trim();
+}
 
 function initialValues(initial?: HrEmployee | null): Record<TextKey, string> {
   const out = {} as Record<TextKey, string>;
@@ -250,16 +258,32 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
 
   // Division/Section/مرحلة (Job) come from the manageable org tree (the Employees sidebar
   // tree), not a flat catalog — a cascading pick, mirroring how a student's class hierarchy
-  // works.
+  // works. For the Teachers division specifically, Section is instead sourced from the Time
+  // Table > Subjects catalog (see subjectOptions below), so assigning a teacher to a subject
+  // there and picking that same subject in the Classes's Time Table cell editor line up
+  // automatically. مرحلة still looks up the org tree's matching section (by name, stripping
+  // its "مادة " prefix) so it keeps working wherever a subject's name lines up with it.
+  const isTeacherDivision = values.division === TEACHER_DIVISION;
   const { tree: orgTree } = useHrOrg();
   const orgDivision = orgTree.find((d) => d.division === values.division);
-  const orgSection = orgDivision?.sections.find((s) => s.section === values.section);
+  const orgSection = orgDivision?.sections.find((s) =>
+    isTeacherDivision ? normalizeSectionName(s.section) === values.section.trim() : s.section === values.section
+  );
 
   const setDivision = (e: ChangeEvent<HTMLSelectElement>) =>
     setValues((v) => ({ ...v, division: e.target.value, section: "", job: "" }));
   const setSection = (e: ChangeEvent<HTMLSelectElement>) => setValues((v) => ({ ...v, section: e.target.value, job: "" }));
 
   const { token } = useAuth();
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  useEffect(() => {
+    if (!token) return;
+    api
+      .getSubjects(token)
+      .then((res) => setSubjects(res.subjects))
+      .catch(() => setSubjects([]));
+  }, [token]);
+
   const [shifts, setShifts] = useState<HrShift[]>([]);
   useEffect(() => {
     if (!token || !selectedSchoolId) return;
@@ -494,11 +518,17 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
               <Field label="Section">
                 <select value={values.section} onChange={setSection} className={selectCls} disabled={!orgDivision} dir="rtl">
                   <option value="">—</option>
-                  {orgDivision?.sections.map((s) => (
-                    <option key={s.id} value={s.section}>
-                      {s.section}
-                    </option>
-                  ))}
+                  {isTeacherDivision
+                    ? subjects.map((s) => (
+                        <option key={s.id} value={s.name}>
+                          {s.name}
+                        </option>
+                      ))
+                    : orgDivision?.sections.map((s) => (
+                        <option key={s.id} value={s.section}>
+                          {s.section}
+                        </option>
+                      ))}
                 </select>
               </Field>
               <Field label="Department">

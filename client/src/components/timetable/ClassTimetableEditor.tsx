@@ -7,6 +7,14 @@ import type { DailyPeriod, Subject, TimetableEntry, TimetableTeacher } from "../
 
 const DAY_LABELS = ["الاحد", "الاثنين", "الثلاثاء", "الاربعاء", "الخميس"];
 
+// A teacher's HR "Section" (see EmployeeFormModal's Teachers-division special case) is
+// either the subject's name verbatim, or the org tree's seeded "مادة <subject>" form.
+function teachesSubject(teacherSection: string | null, subjectName: string): boolean {
+  if (!teacherSection) return false;
+  const normalized = teacherSection.replace(/^مادة\s+/, "").trim();
+  return normalized === subjectName.trim() || teacherSection.trim() === subjectName.trim();
+}
+
 type Props = {
   initialClassId?: number | null;
   onBack: () => void;
@@ -122,6 +130,25 @@ export default function ClassTimetableEditor({ initialClassId, onBack }: Props) 
     setEditingCell({ day, periodNo });
     setCellSubjectId(existing?.subject_id ?? "");
     setCellTeacherId(existing?.teacher_id ?? "");
+  };
+
+  // Only the teacher(s) whose HR Section matches the chosen subject — falling back to
+  // everyone when nobody's been assigned to that subject yet, so the picker never goes empty.
+  const cellTeacherOptions = useMemo(() => {
+    const subjectName = subjects.find((s) => s.id === cellSubjectId)?.name;
+    if (!subjectName) return teachers;
+    const matching = teachers.filter((t) => teachesSubject(t.section, subjectName));
+    return matching.length > 0 ? matching : teachers;
+  }, [cellSubjectId, subjects, teachers]);
+
+  const chooseCellSubject = (subjectId: number | "") => {
+    setCellSubjectId(subjectId);
+    const subjectName = subjects.find((s) => s.id === subjectId)?.name;
+    if (!subjectName) return;
+    const matching = teachers.filter((t) => teachesSubject(t.section, subjectName));
+    if (matching.length > 0 && cellTeacherId && !matching.some((t) => t.employee_id === cellTeacherId)) {
+      setCellTeacherId("");
+    }
   };
 
   const saveCell = async () => {
@@ -397,7 +424,7 @@ export default function ClassTimetableEditor({ initialClassId, onBack }: Props) 
                   <label className="mb-1 block text-xs font-medium text-slate-500">Subject</label>
                   <select
                     value={cellSubjectId}
-                    onChange={(e) => setCellSubjectId(e.target.value ? Number(e.target.value) : "")}
+                    onChange={(e) => chooseCellSubject(e.target.value ? Number(e.target.value) : "")}
                     className={`${selectCls} mb-3`}
                     autoFocus
                   >
@@ -415,7 +442,7 @@ export default function ClassTimetableEditor({ initialClassId, onBack }: Props) 
                     className={`${selectCls} mb-4`}
                   >
                     <option value="">—</option>
-                    {teachers.map((t) => (
+                    {cellTeacherOptions.map((t) => (
                       <option key={t.employee_id} value={t.employee_id}>
                         {t.name}
                       </option>

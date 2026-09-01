@@ -179,6 +179,16 @@ db.exec(`
     FOREIGN KEY (fee_type_id) REFERENCES fee_types(id)
   );
 
+  -- Which Expend/Fee Items catalog entries apply to a given student — assigned from the
+  -- Students Data grid (click a row) before any payment against them is ever recorded.
+  CREATE TABLE IF NOT EXISTS student_fee_items (
+    student_id INTEGER NOT NULL,
+    fee_type_id INTEGER NOT NULL,
+    PRIMARY KEY (student_id, fee_type_id),
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+    FOREIGN KEY (fee_type_id) REFERENCES fee_types(id) ON DELETE CASCADE
+  );
+
   CREATE TABLE IF NOT EXISTS activity_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL,

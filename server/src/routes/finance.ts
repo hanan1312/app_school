@@ -38,6 +38,30 @@ financeRouter.put("/fee-types/:id", requireAuth, (req, res) => {
   res.json({ feeType });
 });
 
+financeRouter.get("/students/:studentId/fee-items", requireAuth, (req, res) => {
+  const studentId = Number(req.params.studentId);
+  const rows = db.prepare("SELECT fee_type_id FROM student_fee_items WHERE student_id = ?").all(studentId) as {
+    fee_type_id: number;
+  }[];
+  res.json({ feeTypeIds: rows.map((r) => r.fee_type_id) });
+});
+
+financeRouter.put("/students/:studentId/fee-items", requireAuth, (req, res) => {
+  const studentId = Number(req.params.studentId);
+  const feeTypeIds = Array.isArray(req.body?.feeTypeIds)
+    ? (req.body.feeTypeIds as unknown[]).map((v) => Number(v)).filter((n) => Number.isInteger(n))
+    : [];
+
+  const replace = db.transaction((ids: number[]) => {
+    db.prepare("DELETE FROM student_fee_items WHERE student_id = ?").run(studentId);
+    const insert = db.prepare("INSERT INTO student_fee_items (student_id, fee_type_id) VALUES (?, ?)");
+    for (const feeTypeId of ids) insert.run(studentId, feeTypeId);
+  });
+  replace(feeTypeIds);
+
+  res.json({ feeTypeIds });
+});
+
 financeRouter.delete("/fee-types/:id", requireAuth, (req, res) => {
   const id = Number(req.params.id);
   const info = db.prepare("DELETE FROM fee_types WHERE id = ?").run(id);

@@ -34,6 +34,7 @@ import AttendanceModal from "../components/AttendanceModal";
 import AttendanceAnalysisModal from "../components/AttendanceAnalysisModal";
 import NoShowModal from "../components/NoShowModal";
 import PaymentFormModal from "../components/PaymentFormModal";
+import StudentExpendItemsModal from "../components/StudentExpendItemsModal";
 import CsvImportModal, { type ImportColumn } from "../components/CsvImportModal";
 import RibbonGroup from "../components/RibbonGroup";
 
@@ -106,6 +107,7 @@ export default function StudentsPage() {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Student | null>(null);
+  const [expendItemsStudent, setExpendItemsStudent] = useState<Student | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Student[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -349,6 +351,7 @@ export default function StudentsPage() {
           onEdit={setEditing}
           onDelete={(s) => setPendingDelete([s])}
           onDeleteMany={setPendingDelete}
+          onRowClick={setExpendItemsStudent}
         />
       </div>
 
@@ -356,6 +359,10 @@ export default function StudentsPage() {
 
       {editing && (
         <StudentFormModal tree={tree} initial={editing} onClose={() => setEditing(null)} onSubmit={handleUpdate} />
+      )}
+
+      {expendItemsStudent && (
+        <StudentExpendItemsModal student={expendItemsStudent} onClose={() => setExpendItemsStudent(null)} />
       )}
 
       {reportOpen && (

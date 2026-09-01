@@ -184,6 +184,16 @@ export const api = {
   deleteFeeType: (token: string, id: number) =>
     request<void>(`/finance/fee-types/${id}`, { method: "DELETE", token }),
 
+  getStudentFeeItems: (token: string, studentId: number) =>
+    request<{ feeTypeIds: number[] }>(`/finance/students/${studentId}/fee-items`, { token }),
+
+  setStudentFeeItems: (token: string, studentId: number, feeTypeIds: number[]) =>
+    request<{ feeTypeIds: number[] }>(`/finance/students/${studentId}/fee-items`, {
+      method: "PUT",
+      body: JSON.stringify({ feeTypeIds }),
+      token,
+    }),
+
   getPayments: (token: string, params: { classId?: number; studentId?: number; q?: string } = {}) => {
     const search = new URLSearchParams();
     if (params.classId) search.set("classId", String(params.classId));

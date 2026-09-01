@@ -263,6 +263,9 @@ export const api = {
   clearTimetableTeacherOverride: (token: string, employeeId: number) =>
     request<{ ok: true }>(`/timetable/teachers/${employeeId}/active`, { method: "DELETE", token }),
 
+  getClassTimetableOverview: (token: string) =>
+    request<{ overview: import("./types").ClassTimetableOverviewRow[] }>("/timetable/overview", { token }),
+
   getClassTimetableStatus: (token: string, classId: number) =>
     request<import("./types").ClassTimetableStatus>(`/timetable/status/${classId}`, { token }),
 

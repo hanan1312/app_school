@@ -206,6 +206,25 @@ timetableRouter.delete("/teachers/:employeeId/active", requireAuth, (req, res) =
   res.json({ ok: true });
 });
 
+// --- Overview (the Time Table icon's class cards — one row per class, no N+1 calls) ---
+
+timetableRouter.get("/overview", requireAuth, (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT classes.id as class_id,
+              COUNT(timetable_entries.id) as entry_count,
+              COALESCE(class_timetable_status.posted, 0) as posted
+       FROM classes
+       LEFT JOIN timetable_entries ON timetable_entries.class_id = classes.id
+       LEFT JOIN class_timetable_status ON class_timetable_status.class_id = classes.id
+       GROUP BY classes.id`
+    )
+    .all() as { class_id: number; entry_count: number; posted: number }[];
+  res.json({
+    overview: rows.map((r) => ({ classId: r.class_id, entryCount: r.entry_count, posted: Boolean(r.posted) })),
+  });
+});
+
 // --- Time Table Post (lock a class's timetable against further edits) ---
 
 timetableRouter.get("/status/:classId", requireAuth, (req, res) => {

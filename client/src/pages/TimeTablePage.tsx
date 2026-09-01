@@ -3,6 +3,7 @@ import { useOutletContext } from "react-router-dom";
 import { CalendarDays, ListChecks, BookMarked, FileStack, GraduationCap, Link2, Clock3 } from "lucide-react";
 import { useClasses } from "../context/ClassesContext";
 import RibbonGroup from "../components/RibbonGroup";
+import ClassTimetableCardsModal from "../components/timetable/ClassTimetableCardsModal";
 import ClassTimetableModal from "../components/timetable/ClassTimetableModal";
 import SubjectSetupModal from "../components/timetable/SubjectSetupModal";
 import TeachersModal from "../components/timetable/TeachersModal";
@@ -12,9 +13,10 @@ type OutletCtx = { notify: (label: string) => void };
 
 export default function TimeTablePage() {
   useOutletContext<OutletCtx>();
-  const { selectedClassId, selectedClassName } = useClasses();
+  const { selectedClassName } = useClasses();
 
-  const [classTableOpen, setClassTableOpen] = useState<"selected" | "blank" | null>(null);
+  const [cardsOpen, setCardsOpen] = useState(false);
+  const [activeClassId, setActiveClassId] = useState<number | "blank" | null>(null);
   const [subjectsOpen, setSubjectsOpen] = useState(false);
   const [teachersOpen, setTeachersOpen] = useState(false);
   const [dailyPeriodsOpen, setDailyPeriodsOpen] = useState(false);
@@ -26,8 +28,8 @@ export default function TimeTablePage() {
         <RibbonGroup
           caption="Time Tables"
           buttons={[
-            { label: "Time Table", icon: CalendarDays, onClick: () => setClassTableOpen("selected") },
-            { label: "Time Table Management", icon: ListChecks, onClick: () => setClassTableOpen("blank") },
+            { label: "Time Table", icon: CalendarDays, onClick: () => setCardsOpen(true) },
+            { label: "Time Table Management", icon: ListChecks, onClick: () => setActiveClassId("blank") },
           ]}
         />
         <RibbonGroup
@@ -62,10 +64,19 @@ export default function TimeTablePage() {
 
       <div className="flex flex-1 items-center justify-center px-4 text-center text-sm text-slate-400">{note}</div>
 
-      {classTableOpen && (
+      {cardsOpen && (
+        <ClassTimetableCardsModal
+          onSelectClass={(classId) => {
+            setCardsOpen(false);
+            setActiveClassId(classId);
+          }}
+          onClose={() => setCardsOpen(false)}
+        />
+      )}
+      {activeClassId != null && (
         <ClassTimetableModal
-          initialClassId={classTableOpen === "selected" ? selectedClassId : null}
-          onClose={() => setClassTableOpen(null)}
+          initialClassId={typeof activeClassId === "number" ? activeClassId : null}
+          onClose={() => setActiveClassId(null)}
         />
       )}
       {subjectsOpen && <SubjectSetupModal onClose={() => setSubjectsOpen(false)} />}

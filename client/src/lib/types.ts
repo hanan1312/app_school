@@ -263,6 +263,12 @@ export type ClassTimetableStatus = {
   postedAt: string | null;
 };
 
+export type ClassTimetableOverviewRow = {
+  classId: number;
+  entryCount: number;
+  posted: boolean;
+};
+
 export type Bus = {
   id: number;
   route_name: string;

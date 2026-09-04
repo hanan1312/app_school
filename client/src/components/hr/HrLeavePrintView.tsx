@@ -1,5 +1,6 @@
 import { Printer, X } from "lucide-react";
 import { assetUrl } from "../../lib/api";
+import { useSettings } from "../../context/SettingsContext";
 import type { HrEmployee, HrLeaveEntry, School } from "../../lib/types";
 
 type Props = {
@@ -18,8 +19,12 @@ function formatDate(value: string | null) {
 }
 
 export default function HrLeavePrintView({ employee, school, entry, balanceBefore, balanceAfter, onClose }: Props) {
+  const { settings } = useSettings();
   const days = Math.abs(entry.count);
-  const logoUrl = assetUrl(school.logo_url);
+  // Prefers this school's own logo (kept distinct per school for multi-school installs) but
+  // falls back to the single global branding logo set in Preferences, so the header circle
+  // isn't left empty for a school that never uploaded its own.
+  const logoUrl = assetUrl(school.logo_url || settings.logo_url);
 
   return (
     <div className="animate-fade-in fixed inset-0 z-40 flex items-center justify-center bg-ink-950/70 p-4 backdrop-blur-sm">

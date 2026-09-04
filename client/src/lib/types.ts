@@ -249,6 +249,7 @@ export type DailyPeriod = {
   period_no: number;
   start_time: string;
   end_time: string;
+  is_break: number;
 };
 
 export type TimetableTeacher = {
@@ -257,7 +258,17 @@ export type TimetableTeacher = {
   employee_status: string | null;
   section: string | null;
   subject_id: number | null;
+  periods_share: number | null;
   active: number;
+};
+
+export type TeacherSummary = {
+  employee: { id: number; name: string; periodsShare: number };
+  subject: { id: number; name: string; price: number } | null;
+  classes: { class_id: number; class_name: string; sessions: number }[];
+  totalActual: number;
+  remaining: number;
+  price: number;
 };
 
 export type ClassTimetableStatus = {
@@ -472,6 +483,9 @@ export type HrEmployee = {
   fellowship_box: number;
   insured_pension: number;
   basic_salary: number;
+  periods_share: number | null;
+  staff_role: string | null;
+  linked_user_id: number | null;
   photo_url: string | null;
 };
 
@@ -520,6 +534,8 @@ export type HrEmployeeInput = {
   insuredWithAnother?: boolean;
   fellowshipBox?: boolean;
   insuredPension?: boolean;
+  periodsShare?: number;
+  staffRole?: string;
 };
 
 export type HrAttendanceStatus = "present" | "absent" | "late";
@@ -624,6 +640,12 @@ export type HrValuedItem = {
   name: string;
   amount: number;
   is_percentage: number;
+};
+
+export type HrLeaveBalanceRow = {
+  employee_id: number;
+  leave_type_id: number;
+  balance: number;
 };
 
 export type HrShift = {

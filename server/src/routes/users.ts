@@ -4,6 +4,7 @@ import { db } from "../db";
 import { requireAuth, type AuthedRequest } from "../auth";
 import { requireModule, isAdminOrMaster } from "../permissions";
 import { masterAccount } from "../masterAccount";
+import { isStrongPassword } from "../passwords";
 
 export const usersRouter = Router();
 usersRouter.use(requireModule("control"));
@@ -19,6 +20,9 @@ usersRouter.post("/", requireAuth, (req: AuthedRequest, res) => {
   const b = req.body ?? {};
   if (!b.username || !b.password || !b.fullName) {
     return res.status(400).json({ error: "username, password and fullName are required" });
+  }
+  if (!isStrongPassword(b.password)) {
+    return res.status(400).json({ error: "Password must be at least 8 characters and include both letters and numbers" });
   }
 
   const requestedRole = typeof b.role === "string" && b.role ? b.role : "staff";
@@ -58,6 +62,9 @@ usersRouter.put("/:id", requireAuth, (req: AuthedRequest, res) => {
     return res.status(403).json({ error: "Only an admin can grant the admin role" });
   }
 
+  if (b.password && !isStrongPassword(b.password)) {
+    return res.status(400).json({ error: "Password must be at least 8 characters and include both letters and numbers" });
+  }
   const hash = b.password ? bcrypt.hashSync(b.password, 10) : existing.password_hash;
 
   db.prepare("UPDATE users SET full_name = ?, role = ?, password_hash = ? WHERE id = ?").run(
@@ -93,6 +100,9 @@ usersRouter.delete("/:id", requireAuth, (req: AuthedRequest, res) => {
 
   const tx = db.transaction(() => {
     db.prepare("DELETE FROM user_permissions WHERE user_id = ?").run(id);
+    // hr_employees.linked_user_id (Configure Staff User) has no ON DELETE clause — unlink
+    // rather than leave the employee pointed at a deleted account.
+    db.prepare("UPDATE hr_employees SET linked_user_id = NULL WHERE linked_user_id = ?").run(id);
     db.prepare("DELETE FROM users WHERE id = ?").run(id);
   });
   tx();

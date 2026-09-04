@@ -40,7 +40,7 @@ export const MODULES: ModuleDef[] = [
   { key: "inventory", label: "Inventory", icon: Package, path: "/inventory", section: "studentsAffair" },
   { key: "timetable", label: "Time Table", icon: CalendarDays, path: "/timetable", section: "studentsAffair" },
   { key: "buses", label: "Buses", icon: Bus, path: "/buses", section: "studentsAffair" },
-  { key: "management", label: "Management", icon: Building2, path: "/management", section: "studentsAffair" },
+  { key: "management", label: "Management", icon: Building2, path: "/management", section: "hrStaff" },
   { key: "configuration", label: "Preferences", icon: Settings, path: "/preferences", section: "studentsAffair" },
   {
     key: "configurationPanel",

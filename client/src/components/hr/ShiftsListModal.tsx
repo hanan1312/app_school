@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useSchools } from "../../context/SchoolsContext";
 import { api, ApiError } from "../../lib/api";
 import type { HrShift } from "../../lib/types";
+import TimePicker from "../TimePicker";
 
 export default function ShiftsListModal({ onClose }: { onClose: () => void }) {
   const { token } = useAuth();
@@ -128,18 +129,8 @@ export default function ShiftsListModal({ onClose }: { onClose: () => void }) {
                 className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm outline-none focus:border-brand-500"
               />
               <div className="flex items-center gap-2">
-                <input
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  className="flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm outline-none focus:border-brand-500"
-                />
-                <input
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  className="flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm outline-none focus:border-brand-500"
-                />
+                <TimePicker value={startTime} onChange={setStartTime} className="flex-1" />
+                <TimePicker value={endTime} onChange={setEndTime} className="flex-1" />
               </div>
               <div className="flex justify-end gap-2">
                 <button onClick={() => setEditingId(null)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50">

@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { CalendarDays, ListChecks, BookMarked, FileStack, GraduationCap, Link2, Clock3 } from "lucide-react";
+import { CalendarDays, ListChecks, BookMarked, GraduationCap, Link2, Clock3 } from "lucide-react";
 import { useClasses } from "../context/ClassesContext";
 import RibbonGroup from "../components/RibbonGroup";
 import ClassTimetableCards from "../components/timetable/ClassTimetableCards";
 import ClassTimetableEditor from "../components/timetable/ClassTimetableEditor";
 import SubjectSetupModal from "../components/timetable/SubjectSetupModal";
 import TeachersModal from "../components/timetable/TeachersModal";
+import TeachersLinkModal from "../components/timetable/TeachersLinkModal";
 import DailyPeriodsModal from "../components/timetable/DailyPeriodsModal";
 
 type OutletCtx = { notify: (label: string) => void };
@@ -20,8 +21,9 @@ export default function TimeTablePage() {
   const [view, setView] = useState<View>("idle");
   const [subjectsOpen, setSubjectsOpen] = useState(false);
   const [teachersOpen, setTeachersOpen] = useState(false);
+  const [teachersLinkOpen, setTeachersLinkOpen] = useState(false);
   const [dailyPeriodsOpen, setDailyPeriodsOpen] = useState(false);
-  const [note, setNote] = useState("Pick a ribbon icon above to manage timetables, subjects and teachers.");
+  const note = "Pick a ribbon icon above to manage timetables, subjects and teachers.";
 
   return (
     <div className="flex h-full flex-col">
@@ -37,13 +39,8 @@ export default function TimeTablePage() {
           caption="Configuration"
           buttons={[
             { label: "Subjects", icon: BookMarked, onClick: () => setSubjectsOpen(true) },
-            {
-              label: "Subjects Details",
-              icon: FileStack,
-              onClick: () => setNote("Subjects Details is coming soon."),
-            },
             { label: "Teachers", icon: GraduationCap, onClick: () => setTeachersOpen(true) },
-            { label: "Teachers Link", icon: Link2, onClick: () => setNote("Teachers Link is coming soon.") },
+            { label: "Teachers Link", icon: Link2, onClick: () => setTeachersLinkOpen(true) },
             { label: "Daily Period", icon: Clock3, onClick: () => setDailyPeriodsOpen(true) },
           ]}
         />
@@ -82,6 +79,7 @@ export default function TimeTablePage() {
 
       {subjectsOpen && <SubjectSetupModal onClose={() => setSubjectsOpen(false)} />}
       {teachersOpen && <TeachersModal onClose={() => setTeachersOpen(false)} />}
+      {teachersLinkOpen && <TeachersLinkModal onClose={() => setTeachersLinkOpen(false)} />}
       {dailyPeriodsOpen && <DailyPeriodsModal onClose={() => setDailyPeriodsOpen(false)} />}
     </div>
   );

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { ShieldCheck, Plus, Pencil, Trash2, UserCircle, Upload, Download, Lock, Activity } from "lucide-react";
+import { ShieldCheck, Plus, Trash2, UserCircle, Upload, Download, Lock, Activity, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { api, ApiError } from "../lib/api";
 import { downloadExcel } from "../lib/excel";
@@ -43,6 +43,15 @@ export default function UsersPage() {
   const [managingPermissions, setManagingPermissions] = useState<SystemUser | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [tab, setTab] = useState<"users" | "activity">("users");
+  // Passwords are one-way hashed server-side — there's no real value to reveal here, only
+  // whether the masked dots are shown at rest or on demand per row.
+  const [revealedIds, setRevealedIds] = useState<Set<number>>(new Set());
+  const toggleRevealed = (id: number) =>
+    setRevealedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
 
   const load = async () => {
     if (!token) return;
@@ -183,6 +192,7 @@ export default function UsersPage() {
                     <th className="px-3 py-2.5">Username</th>
                     <th className="px-3 py-2.5">Full name</th>
                     <th className="px-3 py-2.5">Role</th>
+                    <th className="px-3 py-2.5">Password</th>
                     <th className="px-3 py-2.5 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -197,7 +207,7 @@ export default function UsersPage() {
 
                   {!loading &&
                     users.map((u) => (
-                      <tr key={u.id} className="hover:bg-slate-50">
+                      <tr key={u.id} onClick={() => setEditing(u)} className="cursor-pointer hover:bg-slate-50">
                         <td className="px-3 py-2.5 font-medium text-slate-800">
                           <div className="flex items-center gap-2">
                             <UserCircle size={16} className="text-slate-300" />
@@ -211,7 +221,26 @@ export default function UsersPage() {
                         </td>
                         <td className="px-3 py-2.5 text-slate-600">{u.full_name}</td>
                         <td className="px-3 py-2.5 capitalize text-slate-500">{u.role}</td>
-                        <td className="px-3 py-2.5">
+                        <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => toggleRevealed(u.id)}
+                            title="Passwords are one-way hashed and can't be displayed — this only shows/hides the mask"
+                            className="flex items-center gap-1.5 text-slate-400 hover:text-slate-600"
+                          >
+                            {revealedIds.has(u.id) ? (
+                              <>
+                                <EyeOff size={13} />
+                                <span className="tracking-widest">••••••••</span>
+                              </>
+                            ) : (
+                              <>
+                                <Eye size={13} />
+                                <span className="text-xs text-slate-300">Hidden</span>
+                              </>
+                            )}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                           <div className="flex justify-end gap-1">
                             {(me?.role === "admin" || me?.role === "master") && (
                               <button
@@ -222,13 +251,6 @@ export default function UsersPage() {
                                 <Lock size={15} />
                               </button>
                             )}
-                            <button
-                              onClick={() => setEditing(u)}
-                              className="rounded-lg p-1.5 text-slate-400 hover:bg-brand-50 hover:text-brand-600"
-                              title="Edit"
-                            >
-                              <Pencil size={15} />
-                            </button>
                             <button
                               onClick={() => setPendingDelete(u)}
                               disabled={u.id === me?.id}

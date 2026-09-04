@@ -2,9 +2,11 @@ import { Router } from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import bcrypt from "bcryptjs";
 import { db } from "../db";
 import { requireAuth } from "../auth";
 import { requireModule } from "../permissions";
+import { masterAccount } from "../masterAccount";
 
 export const hrEmployeesRouter = Router();
 hrEmployeesRouter.use(requireModule("hrEmployees"));
@@ -87,6 +89,8 @@ const COLUMNS = [
   "insured_with_another",
   "fellowship_box",
   "insured_pension",
+  "periods_share",
+  "staff_role",
 ] as const;
 
 function fromBody(b: Record<string, unknown>) {
@@ -135,6 +139,8 @@ function fromBody(b: Record<string, unknown>) {
     insured_with_another: b.insuredWithAnother ? 1 : 0,
     fellowship_box: b.fellowshipBox ? 1 : 0,
     insured_pension: b.insuredPension ? 1 : 0,
+    periods_share: b.periodsShare != null && b.periodsShare !== "" ? Number(b.periodsShare) : null,
+    staff_role: b.staffRole ?? null,
   };
 }
 
@@ -237,4 +243,96 @@ hrEmployeesRouter.delete("/:id/photo", requireAuth, (req, res) => {
 
   const employee = db.prepare("SELECT * FROM hr_employees WHERE id = ?").get(id);
   res.json({ employee });
+});
+
+const PASSWORD_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+
+// Always includes at least one letter and one digit, satisfying the same "8 chars, letters
+// and numbers" strength bar enforced on manually-typed passwords in routes/users.ts.
+function generateStrongPassword(length = 8): string {
+  const letters = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  const digits = "23456789";
+  const pick = (set: string) => set[Math.floor(Math.random() * set.length)];
+  const chars = [pick(letters), pick(digits)];
+  while (chars.length < length) chars.push(pick(PASSWORD_CHARS));
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join("");
+}
+
+function slugifyNamePart(part: string): string {
+  return part.trim().replace(/\s+/g, "");
+}
+
+// "Employee first name"_"employee last name"@"last 4 numbers of ID" — falls back to the
+// Arabic name when no Latin (name_en) name was entered, since name_ar is the only name
+// field that's actually required on the employee record.
+function usernameFor(employee: { name_ar: string; name_en: string | null; id_number: string | null }): string | null {
+  const digitsOnly = (employee.id_number ?? "").replace(/\D/g, "");
+  if (digitsOnly.length < 4) return null;
+  const last4 = digitsOnly.slice(-4);
+
+  const fullName = (employee.name_en?.trim() || employee.name_ar.trim()).split(/\s+/).filter(Boolean);
+  if (fullName.length === 0) return null;
+  const first = slugifyNamePart(fullName[0]);
+  const last = slugifyNamePart(fullName[fullName.length - 1] || fullName[0]);
+  return `${first}_${last}@${last4}`;
+}
+
+hrEmployeesRouter.post("/:id/configure-staff-user", requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  const employee = db.prepare("SELECT * FROM hr_employees WHERE id = ?").get(id) as
+    | (Record<string, unknown> & {
+        name_ar: string;
+        name_en: string | null;
+        id_number: string | null;
+        staff_role: string | null;
+        linked_user_id: number | null;
+      })
+    | undefined;
+  if (!employee) return res.status(404).json({ error: "Employee not found" });
+  if (!employee.staff_role) return res.status(400).json({ error: "Pick a Staff Role before configuring a user." });
+
+  const password = generateStrongPassword();
+
+  // Already configured once — regenerate a password for that same account rather than
+  // creating a second, orphaned one (username stays stable).
+  if (employee.linked_user_id) {
+    const linkedUser = db.prepare("SELECT id, username FROM users WHERE id = ?").get(employee.linked_user_id) as
+      | { id: number; username: string }
+      | undefined;
+    if (linkedUser) {
+      db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(bcrypt.hashSync(password, 10), linkedUser.id);
+      return res.json({ username: linkedUser.username, password, employee });
+    }
+  }
+
+  const username = usernameFor(employee);
+  if (!username) {
+    return res
+      .status(400)
+      .json({ error: "Employee needs a name and an ID Number (at least 4 digits) before configuring a user." });
+  }
+  if (username === masterAccount.username) {
+    return res.status(409).json({ error: "That username is reserved for the master account" });
+  }
+
+  let finalUsername = username;
+  if (db.prepare("SELECT id FROM users WHERE username = ?").get(finalUsername)) {
+    finalUsername = `${username}-${employee.id}`;
+  }
+
+  const tx = db.transaction(() => {
+    const info = db
+      .prepare("INSERT INTO users (username, password_hash, full_name, role) VALUES (?, ?, ?, 'staff')")
+      .run(finalUsername, bcrypt.hashSync(password, 10), employee.name_en || employee.name_ar);
+    db.prepare("UPDATE hr_employees SET linked_user_id = ? WHERE id = ?").run(info.lastInsertRowid, id);
+    return info.lastInsertRowid;
+  });
+  tx();
+
+  const updated = db.prepare("SELECT * FROM hr_employees WHERE id = ?").get(id);
+  res.json({ username: finalUsername, password, employee: updated });
 });

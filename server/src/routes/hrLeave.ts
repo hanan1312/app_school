@@ -19,6 +19,51 @@ function daysBetween(from: string, to: string): number {
   return Math.round(ms / (1000 * 60 * 60 * 24)) + 1;
 }
 
+// Registered before the "/:employeeId" param route below so "balances" isn't swallowed as an id.
+// Backs the Configuration > Leaves Balance matrix (every employee x every leave type) — one
+// aggregate query instead of one ledger fetch per employee.
+hrLeaveRouter.get("/balances", requireAuth, (req, res) => {
+  const { schoolId } = req.query as { schoolId?: string };
+  if (!schoolId) return res.status(400).json({ error: "schoolId is required" });
+
+  const rows = db
+    .prepare(
+      `SELECT employee_id, leave_type_id, SUM(count) as balance
+       FROM hr_leave_ledger
+       WHERE school_id = ?
+       GROUP BY employee_id, leave_type_id`
+    )
+    .all(Number(schoolId));
+  res.json({ balances: rows });
+});
+
+// Reconciles an employee's running balance for one leave type to an exact target by inserting
+// a single adjustment ledger row for the difference — preserves the append-only ledger (and
+// any leave already taken) instead of rewriting history, matching the "ledger IS the balance"
+// pattern the rest of this table already uses.
+hrLeaveRouter.post("/adjust-balance", requireAuth, (req, res) => {
+  const b = req.body ?? {};
+  if (!b.employeeId || !b.schoolId || !b.leaveTypeId || typeof b.targetBalance !== "number") {
+    return res.status(400).json({ error: "employeeId, schoolId, leaveTypeId and targetBalance are required" });
+  }
+
+  const current = (
+    db
+      .prepare("SELECT COALESCE(SUM(count), 0) as balance FROM hr_leave_ledger WHERE employee_id = ? AND leave_type_id = ?")
+      .get(b.employeeId, b.leaveTypeId) as { balance: number }
+  ).balance;
+  const delta = b.targetBalance - current;
+
+  if (delta !== 0) {
+    db.prepare(
+      `INSERT INTO hr_leave_ledger (employee_id, school_id, entry_date, leave_type_id, count, kind)
+       VALUES (?, ?, ?, ?, ?, 'opening_balance')`
+    ).run(b.employeeId, b.schoolId, new Date().toISOString().slice(0, 10), b.leaveTypeId, delta);
+  }
+
+  res.json({ balance: b.targetBalance });
+});
+
 hrLeaveRouter.get("/:employeeId", requireAuth, (req, res) => {
   const employeeId = Number(req.params.employeeId);
   const rows = db

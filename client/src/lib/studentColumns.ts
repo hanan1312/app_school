@@ -117,8 +117,8 @@ export const STUDENT_COLUMNS: StudentColumnDef[] = [
   { key: "special_case", label: "Special Case", defaultVisible: false, get: (s) => (s.special_case ? "Yes" : "No") },
   { key: "integrated", label: "Integrated", defaultVisible: false, get: (s) => (s.integrated ? "Yes" : "No") },
   { key: "uses_bus", label: "Uses School Bus", defaultVisible: false, get: (s) => (s.uses_bus ? "Yes" : "No") },
-  { key: "transferred_from", label: "Transferred From", defaultVisible: false, get: (s) => s.transferred_from ?? "" },
-  { key: "transferred_in", label: "Transferred In", defaultVisible: false, get: (s) => s.transferred_in ?? "" },
+  { key: "transferred_from", label: "Transfere Out", defaultVisible: false, get: (s) => s.transferred_from ?? "" },
+  { key: "transferred_in", label: "Transfere In", defaultVisible: false, get: (s) => s.transferred_in ?? "" },
 ];
 
 export const DEFAULT_VISIBLE_COLUMNS: StudentColumnKey[] = STUDENT_COLUMNS.filter((c) => c.defaultVisible).map(

@@ -475,7 +475,8 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     period_no INTEGER NOT NULL UNIQUE,
     start_time TEXT NOT NULL,
-    end_time TEXT NOT NULL
+    end_time TEXT NOT NULL,
+    is_break INTEGER NOT NULL DEFAULT 0
   );
 
   -- "Time Table Post" — once posted, a class's timetable can no longer be edited (same
@@ -549,6 +550,9 @@ const HR_EMPLOYEE_COLUMNS: [string, string][] = [
   ["insured_pension", "INTEGER NOT NULL DEFAULT 0"],
   ["basic_salary", "REAL NOT NULL DEFAULT 0"],
   ["subject_id", "INTEGER REFERENCES subjects(id)"],
+  ["periods_share", "INTEGER"],
+  ["staff_role", "TEXT"],
+  ["linked_user_id", "INTEGER REFERENCES users(id)"],
 ];
 
 function migrateHrEmployeesColumns() {
@@ -575,6 +579,13 @@ function migrateTimetableEntryColumns() {
     if (!existing.includes(name)) {
       db.exec(`ALTER TABLE timetable_entries ADD COLUMN ${name} ${type}`);
     }
+  }
+}
+
+function migrateDailyPeriodsColumns() {
+  const existing = (db.prepare("PRAGMA table_info(daily_periods)").all() as { name: string }[]).map((c) => c.name);
+  if (!existing.includes("is_break")) {
+    db.exec("ALTER TABLE daily_periods ADD COLUMN is_break INTEGER NOT NULL DEFAULT 0");
   }
 }
 
@@ -847,6 +858,7 @@ export function seedHrOrgTree(schoolId: number) {
 migrateStudentsColumns();
 migrateHrEmployeesColumns();
 migrateTimetableEntryColumns();
+migrateDailyPeriodsColumns();
 
 seedClasses();
 migrateClassHierarchy();

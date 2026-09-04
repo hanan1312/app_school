@@ -3,6 +3,7 @@ import { X, GraduationCap, Search } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { api, ApiError } from "../../lib/api";
 import type { TimetableTeacher } from "../../lib/types";
+import TeacherSummaryModal from "./TeacherSummaryModal";
 
 export default function TeachersModal({ onClose }: { onClose: () => void }) {
   const { token } = useAuth();
@@ -14,6 +15,7 @@ export default function TeachersModal({ onClose }: { onClose: () => void }) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [pending, setPending] = useState<Map<number, boolean>>(new Map());
   const [saving, setSaving] = useState(false);
+  const [summaryId, setSummaryId] = useState<number | null>(null);
 
   const load = async () => {
     if (!token) return;
@@ -148,7 +150,16 @@ export default function TeachersModal({ onClose }: { onClose: () => void }) {
                     >
                       <td className="px-2 py-1.5 text-slate-500">{i + 1}</td>
                       <td className="px-2 py-1.5 text-slate-700" dir="rtl">
-                        {t.name}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSummaryId(t.employee_id);
+                          }}
+                          className="hover:underline"
+                        >
+                          {t.name}
+                        </button>
                       </td>
                       <td className="px-2 py-1.5 text-center">
                         <input
@@ -194,6 +205,8 @@ export default function TeachersModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
       </div>
+
+      {summaryId != null && <TeacherSummaryModal employeeId={summaryId} onClose={() => setSummaryId(null)} />}
     </div>
   );
 }

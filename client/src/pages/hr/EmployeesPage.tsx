@@ -7,8 +7,6 @@ import {
   ClipboardList,
   Building2,
   Search,
-  Pencil,
-  Trash2,
   X,
   Upload,
   Download,
@@ -22,10 +20,13 @@ import { downloadExcel } from "../../lib/excel";
 import type { HrEmployee, HrEmployeeInput } from "../../lib/types";
 import RibbonGroup from "../../components/RibbonGroup";
 import EmployeeFormModal from "../../components/hr/EmployeeFormModal";
+import HrEmployeeTable from "../../components/hr/HrEmployeeTable";
 import HrAttendanceModal from "../../components/hr/HrAttendanceModal";
 import HrLeaveModal from "../../components/hr/HrLeaveModal";
 import SchoolsSwitcherModal from "../../components/hr/SchoolsSwitcherModal";
 import CsvImportModal, { type ImportColumn } from "../../components/CsvImportModal";
+
+const COLUMNS_STORAGE_KEY = "hr-employees-table-columns-v1";
 
 type OutletCtx = { notify: (label: string) => void };
 
@@ -82,6 +83,8 @@ function selectionLabel(selection: HrOrgSelection): string | null {
   return `${selection.division} / ${selection.section} / ${selection.job}`;
 }
 
+// "Year of contract"_"Year of birth"_"last 4 digits of ID" — a quick-reference code shown
+// right after the employee index, blank pieces just collapse to "—" rather than the string "undefined".
 function matchesSelection(e: HrEmployee, selection: HrOrgSelection): boolean {
   if (selection.type === "all") return true;
   if ((e.division || UNSPECIFIED) !== selection.division) return false;
@@ -248,58 +251,13 @@ export default function EmployeesPage() {
       <div className="flex-1 overflow-auto px-4 py-3">
         {errorMsg && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{errorMsg}</p>}
 
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
-              <tr>
-                <th className="px-3 py-2">#</th>
-                <th className="px-3 py-2">Name</th>
-                <th className="px-3 py-2">Gender</th>
-                <th className="px-3 py-2">ID</th>
-                <th className="px-3 py-2">Country</th>
-                <th className="px-3 py-2">Division</th>
-                <th className="px-3 py-2">Section</th>
-                <th className="px-3 py-2">Department</th>
-                <th className="px-3 py-2">مرحلة</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {visibleEmployees.map((e) => (
-                <tr key={e.id} className="hover:bg-slate-50">
-                  <td className="px-3 py-2 text-slate-400">{e.id}</td>
-                  <td className="px-3 py-2 font-medium text-slate-700">{e.name_ar}</td>
-                  <td className="px-3 py-2 text-slate-500">{e.gender}</td>
-                  <td className="px-3 py-2 text-slate-500">{e.id_number ?? "—"}</td>
-                  <td className="px-3 py-2 text-slate-500">{e.country ?? "—"}</td>
-                  <td className="px-3 py-2 text-slate-500">{e.division ?? "—"}</td>
-                  <td className="px-3 py-2 text-slate-500">{e.section ?? "—"}</td>
-                  <td className="px-3 py-2 text-slate-500">{e.department ?? "—"}</td>
-                  <td className="px-3 py-2 text-slate-500">{e.job ?? "—"}</td>
-                  <td className="px-3 py-2 capitalize text-slate-500">{e.status ?? "—"}</td>
-                  <td className="px-3 py-2">
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => setEditing(e)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
-                        <Pencil size={14} />
-                      </button>
-                      <button onClick={() => setPendingDelete(e)} className="rounded-lg p-1 text-slate-400 hover:bg-red-50 hover:text-red-600">
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {!loading && visibleEmployees.length === 0 && (
-                <tr>
-                  <td colSpan={11} className="px-3 py-8 text-center text-slate-400">
-                    No employees yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <HrEmployeeTable
+          employees={visibleEmployees}
+          onRowClick={setEditing}
+          onDelete={setPendingDelete}
+          storageKey={COLUMNS_STORAGE_KEY}
+          emptyLabel={loading ? "Loading…" : "No employees yet."}
+        />
       </div>
 
       {modalOpen && <EmployeeFormModal onClose={() => setModalOpen(false)} onSubmit={handleCreate} />}

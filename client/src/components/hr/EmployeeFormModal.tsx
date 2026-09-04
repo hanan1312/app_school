@@ -14,9 +14,19 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { useSchools } from "../../context/SchoolsContext";
 import { useHrOrg } from "../../context/HrOrgContext";
+import { useClasses } from "../../context/ClassesContext";
 import { api, ApiError, assetUrl } from "../../lib/api";
-import type { HrEmployee, HrEmployeeInput, HrLookupItem, HrShift, Subject } from "../../lib/types";
+import type { HrEmployee, HrEmployeeInput, HrLookupItem, HrValuedItem, Subject } from "../../lib/types";
 import { Section, Field, inputCls } from "../FormLayout";
+
+const STAFF_DIVISION = "Staff";
+const STAFF_ROLES = [
+  { value: "hr", label: "HR" },
+  { value: "students_affair", label: "Student's Affair" },
+  { value: "bus_supervisor", label: "Bus Supervisor" },
+  { value: "corridor_supervisor", label: "Corridor Supervisor" },
+] as const;
+const DEPARTMENT_SCOPED_ROLES = new Set(["students_affair", "corridor_supervisor"]);
 
 const TABS = [
   { key: "basic", label: "Basic Data", icon: UserCircle2 },
@@ -103,11 +113,13 @@ const SNAKE_MAP: Record<TextKey, keyof HrEmployee> = {
 };
 
 // The seeded org tree's "Teachers" division (see server/src/db.ts's HR_ORG_TREE) — its
-// sections are named "مادة <subject>", one per subject-teaching group.
-const TEACHER_DIVISION = "المدرسين";
-
-function normalizeSectionName(name: string): string {
-  return name.replace(/^مادة\s+/, "").trim();
+// sections are named "مادة <subject>", one per subject-teaching group. The tree is fully
+// editable, so a school may rename this division (e.g. to "Teachers"); both the seed name and
+// its English translation are recognized here, matching server/src/routes/timetable.ts's
+// GET /teachers query so the two stay in sync.
+const TEACHER_DIVISION_NAMES = new Set(["المدرسين", "teachers"]);
+function isTeacherDivisionName(division: string): boolean {
+  return TEACHER_DIVISION_NAMES.has(division.trim().toLowerCase());
 }
 
 function initialValues(initial?: HrEmployee | null): Record<TextKey, string> {
@@ -247,15 +259,33 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
   const [photoUrl, setPhotoUrl] = useState<string | null>(initial?.photo_url ?? null);
   const [values, setValues] = useState<Record<TextKey, string>>(() => initialValues(initial));
   const [teacherSubjectId, setTeacherSubjectId] = useState<number | "">(initial?.subject_id ?? "");
+  const [periodsShare, setPeriodsShare] = useState(initial?.periods_share != null ? String(initial.periods_share) : "");
+  const [staffRole, setStaffRole] = useState(initial?.staff_role ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [linkedUserId, setLinkedUserId] = useState(initial?.linked_user_id ?? null);
+  const [staffCredentials, setStaffCredentials] = useState<{ username: string; password: string } | null>(null);
+  const [configuringStaffUser, setConfiguringStaffUser] = useState(false);
+  const [staffUserError, setStaffUserError] = useState<string | null>(null);
+
+  // Leave Balances — one optional numeric field per configured leave type (Configuration >
+  // Leaves Balance), keyed by leave_type_id so adding a new type there shows up here too
+  // without any code change. Values are the employee's current running balance for that type
+  // (opening balance plus any leave already taken), reconciled via an adjustment ledger entry
+  // on save rather than overwritten in place — see server/src/routes/hrLeave.ts's
+  // /adjust-balance endpoint.
+  const [leaveTypes, setLeaveTypes] = useState<HrValuedItem[]>([]);
+  const [leaveBalances, setLeaveBalances] = useState<Record<number, string>>({});
+
   const countries = useLookupOptions("country", selectedSchoolId);
   const areas = useLookupOptions("area", selectedSchoolId);
-  const departments = useLookupOptions("department", selectedSchoolId);
   const educations = useLookupOptions("education", selectedSchoolId);
   const universities = useLookupOptions("university", selectedSchoolId);
   const banks = useLookupOptions("bank", selectedSchoolId);
+  // "Department" lists the Stages from the Student's Affair "My School" hierarchy (its
+  // subdivisions), not the old hr_lookup_items "department" catalog.
+  const { tree: classTree } = useClasses();
 
   // Division/Section/مرحلة (Job) come from the manageable org tree (the Employees sidebar
   // tree), not a flat catalog — a cascading pick, mirroring how a student's class hierarchy
@@ -264,15 +294,10 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
   // sidebar tree's grouping/counts by section text keep working) and teacherSubjectId (the
   // real subjects.id FK, persisted as hr_employees.subject_id) — the Classes's Time Table
   // cell editor matches teachers to a subject by that id, not by comparing name strings, so
-  // renames/casing/Arabic-vs-English naming can never break the match. مرحلة still looks up
-  // the org tree's matching section (by name, stripping its "مادة " prefix) so it keeps
-  // working wherever a subject's name happens to line up with it.
-  const isTeacherDivision = values.division === TEACHER_DIVISION;
+  // renames/casing/Arabic-vs-English naming can never break the match.
+  const isTeacherDivision = isTeacherDivisionName(values.division);
   const { tree: orgTree } = useHrOrg();
   const orgDivision = orgTree.find((d) => d.division === values.division);
-  const orgSection = orgDivision?.sections.find((s) =>
-    isTeacherDivision ? normalizeSectionName(s.section) === values.section.trim() : s.section === values.section
-  );
 
   const setDivision = (e: ChangeEvent<HTMLSelectElement>) => {
     setValues((v) => ({ ...v, division: e.target.value, section: "", job: "" }));
@@ -296,17 +321,99 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
       .catch(() => setSubjects([]));
   }, [token]);
 
-  const [shifts, setShifts] = useState<HrShift[]>([]);
   useEffect(() => {
-    if (!token || !selectedSchoolId) return;
+    if (!token) return;
     api
-      .getHrShifts(token, selectedSchoolId)
-      .then((res) => setShifts(res.shifts))
-      .catch(() => setShifts([]));
+      .getHrValued(token, "leave_type", selectedSchoolId ?? undefined)
+      .then((res) => setLeaveTypes(res.items))
+      .catch(() => setLeaveTypes([]));
   }, [token, selectedSchoolId]);
+
+  useEffect(() => {
+    if (!token || !initial) return;
+    api
+      .getHrLeaveLedger(token, initial.id)
+      .then((res) => {
+        const totals: Record<number, number> = {};
+        for (const entry of res.ledger) {
+          totals[entry.leave_type_id] = (totals[entry.leave_type_id] ?? 0) + entry.count;
+        }
+        setLeaveBalances(Object.fromEntries(Object.entries(totals).map(([id, total]) => [id, String(total)])));
+      })
+      .catch(() => setLeaveBalances({}));
+  }, [token, initial]);
 
   const setField = (key: TextKey) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setValues((v) => ({ ...v, [key]: e.target.value }));
+
+  const buildPayload = (): HrEmployeeInput => ({
+    schoolId: selectedSchoolId as number,
+    nameAr: nameAr.trim(),
+    gender,
+    salaryMethod,
+    medicalCheck: medicalCheck || undefined,
+    handicap,
+    insured,
+    insuredWithAnother,
+    fellowshipBox,
+    insuredPension,
+    nameEn: values.nameEn.trim() || undefined,
+    address: values.address.trim() || undefined,
+    country: values.country || undefined,
+    area: values.area || undefined,
+    tel1: values.tel1.trim() || undefined,
+    tel2: values.tel2.trim() || undefined,
+    registrationDate: values.registrationDate || undefined,
+    birthday: values.birthday || undefined,
+    religion: values.religion.trim() || undefined,
+    nationality: values.nationality.trim() || undefined,
+    regCode: values.regCode.trim() || undefined,
+    maritalStatus: values.maritalStatus || undefined,
+    email: values.email.trim() || undefined,
+    division: values.division || undefined,
+    section: values.section || undefined,
+    subjectId: teacherSubjectId || undefined,
+    periodsShare: periodsShare.trim() ? Number(periodsShare) : undefined,
+    department: values.department || undefined,
+    job: values.job || undefined,
+    status: values.status || undefined,
+    shift: values.shift || undefined,
+    staffRole: staffRole || undefined,
+    contractType: values.contractType.trim() || undefined,
+    contractFrom: values.contractFrom || undefined,
+    contractTo: values.contractTo || undefined,
+    education: values.education || undefined,
+    university: values.university || undefined,
+    idNumber: values.idNumber.trim() || undefined,
+    bank1Name: values.bank1Name || undefined,
+    bank1Account: values.bank1Account.trim() || undefined,
+    bank2Name: values.bank2Name || undefined,
+    bank2Account: values.bank2Account.trim() || undefined,
+    unionName: values.unionName.trim() || undefined,
+    unionDate: values.unionDate || undefined,
+    insuranceNumber: values.insuranceNumber.trim() || undefined,
+    form1Date: values.form1Date || undefined,
+  });
+
+  // Picking a Staff Role only updates local form state — the server only sees it (and can
+  // only configure a user against it) once the form is actually saved. Saving here first
+  // means clicking this one button works from an unsaved pick, instead of failing with a
+  // confusing "Pick a Staff Role" error for a role that's visibly already selected.
+  const handleConfigureStaffUser = async () => {
+    if (!token || !initial) return;
+    setConfiguringStaffUser(true);
+    setStaffUserError(null);
+    try {
+      await api.updateHrEmployee(token, initial.id, buildPayload());
+      const res = await api.configureStaffUser(token, initial.id);
+      setStaffCredentials({ username: res.username, password: res.password });
+      setLinkedUserId(res.employee.linked_user_id);
+    } catch (err) {
+      setStaffUserError(err instanceof ApiError ? err.message : "Could not configure the staff user.");
+    } finally {
+      setConfiguringStaffUser(false);
+    }
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -322,52 +429,18 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
     setError(null);
 
     try {
-      await onSubmit({
-        schoolId: selectedSchoolId,
-        nameAr: nameAr.trim(),
-        gender,
-        salaryMethod,
-        medicalCheck: medicalCheck || undefined,
-        handicap,
-        insured,
-        insuredWithAnother,
-        fellowshipBox,
-        insuredPension,
-        nameEn: values.nameEn.trim() || undefined,
-        address: values.address.trim() || undefined,
-        country: values.country || undefined,
-        area: values.area || undefined,
-        tel1: values.tel1.trim() || undefined,
-        tel2: values.tel2.trim() || undefined,
-        registrationDate: values.registrationDate || undefined,
-        birthday: values.birthday || undefined,
-        religion: values.religion.trim() || undefined,
-        nationality: values.nationality.trim() || undefined,
-        regCode: values.regCode.trim() || undefined,
-        maritalStatus: values.maritalStatus || undefined,
-        email: values.email.trim() || undefined,
-        division: values.division || undefined,
-        section: values.section || undefined,
-        subjectId: teacherSubjectId || undefined,
-        department: values.department || undefined,
-        job: values.job || undefined,
-        status: values.status || undefined,
-        shift: values.shift || undefined,
-        contractType: values.contractType.trim() || undefined,
-        contractFrom: values.contractFrom || undefined,
-        contractTo: values.contractTo || undefined,
-        education: values.education || undefined,
-        university: values.university || undefined,
-        idNumber: values.idNumber.trim() || undefined,
-        bank1Name: values.bank1Name || undefined,
-        bank1Account: values.bank1Account.trim() || undefined,
-        bank2Name: values.bank2Name || undefined,
-        bank2Account: values.bank2Account.trim() || undefined,
-        unionName: values.unionName.trim() || undefined,
-        unionDate: values.unionDate || undefined,
-        insuranceNumber: values.insuranceNumber.trim() || undefined,
-        form1Date: values.form1Date || undefined,
-      });
+      if (isEdit && initial && token) {
+        for (const [leaveTypeIdStr, val] of Object.entries(leaveBalances)) {
+          if (val.trim() === "") continue;
+          await api.adjustHrLeaveBalance(token, {
+            employeeId: initial.id,
+            schoolId: selectedSchoolId,
+            leaveTypeId: Number(leaveTypeIdStr),
+            targetBalance: Number(val),
+          });
+        }
+      }
+      await onSubmit(buildPayload());
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not save the employee.");
     } finally {
@@ -517,77 +590,136 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
           )}
 
           {tab === "position" && (
-            <Section title="Position" icon={Briefcase}>
-              <Field label="Division">
-                <select value={values.division} onChange={setDivision} className={selectCls} dir="rtl">
-                  <option value="">—</option>
-                  {orgTree.map((d) => (
-                    <option key={d.id} value={d.division}>
-                      {d.division}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Section">
-                {isTeacherDivision ? (
-                  <select value={teacherSubjectId} onChange={setTeacherSubject} className={selectCls} disabled={!orgDivision} dir="rtl">
+            <>
+              <Section title="Position" icon={Briefcase}>
+                <Field label="Division">
+                  <select value={values.division} onChange={setDivision} className={selectCls} dir="rtl">
                     <option value="">—</option>
-                    {subjects.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
+                    {orgTree.map((d) => (
+                      <option key={d.id} value={d.division}>
+                        {d.division}
                       </option>
                     ))}
+                    {!orgTree.some((d) => d.division === STAFF_DIVISION) && (
+                      <option value={STAFF_DIVISION}>Staff</option>
+                    )}
                   </select>
-                ) : (
-                  <select value={values.section} onChange={setSection} className={selectCls} disabled={!orgDivision} dir="rtl">
-                    <option value="">—</option>
-                    {orgDivision?.sections.map((s) => (
-                      <option key={s.id} value={s.section}>
-                        {s.section}
-                      </option>
-                    ))}
-                  </select>
+                </Field>
+                <Field label="Section">
+                  {isTeacherDivision ? (
+                    <select value={teacherSubjectId} onChange={setTeacherSubject} className={selectCls} disabled={!orgDivision} dir="rtl">
+                      <option value="">—</option>
+                      {subjects.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <select value={values.section} onChange={setSection} className={selectCls} disabled={!orgDivision} dir="rtl">
+                      <option value="">—</option>
+                      {orgDivision?.sections.map((s) => (
+                        <option key={s.id} value={s.section}>
+                          {s.section}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </Field>
+                {isTeacherDivision && (
+                  <Field label="Periods Share">
+                    <input
+                      type="number"
+                      min={0}
+                      value={periodsShare}
+                      onChange={(e) => setPeriodsShare(e.target.value)}
+                      className={inputCls}
+                      placeholder="Periods per week"
+                    />
+                  </Field>
                 )}
-              </Field>
-              <Field label="Department">
-                <select value={values.department} onChange={setField("department")} className={selectCls}>
-                  <option value="">—</option>
-                  {departments.map((d) => (
-                    <option key={d.id} value={d.name}>
-                      {d.name}
-                    </option>
+                <Field label="Department">
+                  <select value={values.department} onChange={setField("department")} className={selectCls}>
+                    <option value="">—</option>
+                    {classTree.map((s) => (
+                      <option key={s.id} value={s.stage}>
+                        {s.stage}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Status">
+                  <select value={values.status} onChange={setField("status")} className={selectCls}>
+                    <option value="">—</option>
+                    <option value="active">Active</option>
+                    <option value="on_leave">On Leave</option>
+                    <option value="terminated">Terminated</option>
+                  </select>
+                </Field>
+                {values.division === STAFF_DIVISION && (
+                  <Field label="Staff Role">
+                    <select value={staffRole} onChange={(e) => setStaffRole(e.target.value)} className={selectCls}>
+                      <option value="">—</option>
+                      {STAFF_ROLES.map((r) => (
+                        <option key={r.value} value={r.value}>
+                          {r.label}
+                          {DEPARTMENT_SCOPED_ROLES.has(r.value) && values.department ? ` — ${values.department}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+              </Section>
+
+              {isEdit && leaveTypes.length > 0 && (
+                <Section title="Leave Balances" icon={Briefcase}>
+                  {leaveTypes.map((t) => (
+                    <Field key={t.id} label={`${t.name} Balance`}>
+                      <input
+                        type="number"
+                        value={leaveBalances[t.id] ?? ""}
+                        onChange={(e) => setLeaveBalances((v) => ({ ...v, [t.id]: e.target.value }))}
+                        placeholder={`${t.amount} days/year`}
+                        className={inputCls}
+                      />
+                    </Field>
                   ))}
-                </select>
-              </Field>
-              <Field label="مرحلة">
-                <select value={values.job} onChange={setField("job")} className={selectCls} disabled={!orgSection} dir="rtl">
-                  <option value="">—</option>
-                  {orgSection?.jobs.map((j) => (
-                    <option key={j.id} value={j.job}>
-                      {j.job}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Status">
-                <select value={values.status} onChange={setField("status")} className={selectCls}>
-                  <option value="">—</option>
-                  <option value="active">Active</option>
-                  <option value="on_leave">On Leave</option>
-                  <option value="terminated">Terminated</option>
-                </select>
-              </Field>
-              <Field label="Shift">
-                <select value={values.shift} onChange={setField("shift")} className={selectCls}>
-                  <option value="">—</option>
-                  {shifts.map((s) => (
-                    <option key={s.id} value={s.name}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </Section>
+                </Section>
+              )}
+              {isEdit && leaveTypes.length === 0 && (
+                <p className="text-xs text-slate-400">
+                  Add a leave type from HR &amp; Staff &gt; Configuration &gt; Leaves Balance to set balances here.
+                </p>
+              )}
+              {!isEdit && (
+                <p className="text-xs text-slate-400">Save the employee first to set leave balances.</p>
+              )}
+
+              {values.division === STAFF_DIVISION && staffRole && isEdit && (
+                <Section title="Staff User Account" icon={Briefcase}>
+                  <Field label=" " span={2}>
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={handleConfigureStaffUser}
+                        disabled={configuringStaffUser}
+                        className="rounded-lg bg-gradient-to-r from-brand-600 to-brand-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-brand-600/25 transition hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-60"
+                      >
+                        {configuringStaffUser ? "Configuring…" : linkedUserId ? "Reset Staff Password" : "Configure Staff User"}
+                      </button>
+                      {staffUserError && <p className="text-xs text-red-600">{staffUserError}</p>}
+                      {staffCredentials && (
+                        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                          User of {nameAr} (Staff) is assigned — username: <strong>{staffCredentials.username}</strong>,
+                          password: <strong>{staffCredentials.password}</strong>. The user can change the password later
+                          from the Users tab.
+                        </p>
+                      )}
+                    </div>
+                  </Field>
+                </Section>
+              )}
+            </>
           )}
 
           {tab === "contracts" && (

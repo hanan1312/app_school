@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { api, assetUrl } from "../lib/api";
 import { applyThemePalette } from "../lib/themePalettes";
 import BackgroundWatermark from "../components/BackgroundWatermark";
+import LoginChangePasswordModal from "../components/LoginChangePasswordModal";
 
 function LampIllustration() {
   return (
@@ -40,6 +41,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [branding, setBranding] = useState<{
     school_name?: string;
     logo_url?: string;
@@ -160,9 +162,21 @@ export default function LoginPage() {
             >
               {loading ? "Signing in…" : "Sign In"}
             </button>
+
+            <button
+              type="button"
+              onClick={() => setChangePasswordOpen(true)}
+              className="w-full text-center text-xs text-white/40 underline-offset-2 transition hover:text-gold-300 hover:underline"
+            >
+              Change Password
+            </button>
           </form>
         </div>
       </div>
+
+      {changePasswordOpen && (
+        <LoginChangePasswordModal initialUsername={username} onClose={() => setChangePasswordOpen(false)} />
+      )}
     </div>
   );
 }

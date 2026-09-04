@@ -64,6 +64,12 @@ export const api = {
 
   logout: (token: string) => request<void>("/auth/logout", { method: "POST", token }),
 
+  changeMyPassword: (token: string, body: { currentPassword: string; newPassword: string }) =>
+    request<{ ok: true }>("/auth/change-password", { method: "POST", body: JSON.stringify(body), token }),
+
+  resetPasswordWithCurrent: (body: { username: string; currentPassword: string; newPassword: string }) =>
+    request<{ ok: true }>("/auth/reset-password", { method: "POST", body: JSON.stringify(body) }),
+
   heartbeat: (token: string, idle: boolean) =>
     request<void>("/presence/heartbeat", { method: "POST", body: JSON.stringify({ idle }), token }),
 
@@ -247,6 +253,20 @@ export const api = {
   deleteDailyPeriod: (token: string, id: number) =>
     request<void>(`/timetable/daily-periods/${id}`, { method: "DELETE", token }),
 
+  setDailyPeriodBreak: (token: string, body: { startTime: string; durationMinutes: number }) =>
+    request<{ periods: import("./types").DailyPeriod[] }>("/timetable/daily-periods/break", {
+      method: "POST",
+      body: JSON.stringify(body),
+      token,
+    }),
+
+  applyPeriodDuration: (token: string, body: { periodDurationMinutes: number }) =>
+    request<{ periods: import("./types").DailyPeriod[] }>("/timetable/daily-periods/apply-duration", {
+      method: "POST",
+      body: JSON.stringify(body),
+      token,
+    }),
+
   getTimetableTeachers: (token: string, q?: string) =>
     request<{ teachers: import("./types").TimetableTeacher[] }>(
       `/timetable/teachers${q ? `?q=${encodeURIComponent(q)}` : ""}`,
@@ -262,6 +282,9 @@ export const api = {
 
   clearTimetableTeacherOverride: (token: string, employeeId: number) =>
     request<{ ok: true }>(`/timetable/teachers/${employeeId}/active`, { method: "DELETE", token }),
+
+  getTeacherSummary: (token: string, employeeId: number) =>
+    request<import("./types").TeacherSummary>(`/timetable/teachers/${employeeId}/summary`, { token }),
 
   getClassTimetableOverview: (token: string) =>
     request<{ overview: import("./types").ClassTimetableOverviewRow[] }>("/timetable/overview", { token }),
@@ -502,6 +525,12 @@ export const api = {
       token,
     }),
 
+  configureStaffUser: (token: string, employeeId: number) =>
+    request<{ username: string; password: string; employee: import("./types").HrEmployee }>(
+      `/hr/employees/${employeeId}/configure-staff-user`,
+      { method: "POST", token }
+    ),
+
   getHrAttendance: (token: string, params: { schoolId: number; date: string }) =>
     request<{ records: import("./types").HrAttendanceRecord[]; closed: boolean }>(
       `/hr/attendance?schoolId=${params.schoolId}&date=${params.date}`,
@@ -554,6 +583,14 @@ export const api = {
   ) => request<{ entry: import("./types").HrLeaveEntry }>("/hr/leave", { method: "POST", body: JSON.stringify(body), token }),
 
   deleteHrLeaveEntry: (token: string, id: number) => request<void>(`/hr/leave/${id}`, { method: "DELETE", token }),
+
+  getHrLeaveBalances: (token: string, schoolId: number) =>
+    request<{ balances: import("./types").HrLeaveBalanceRow[] }>(`/hr/leave/balances?schoolId=${schoolId}`, { token }),
+
+  adjustHrLeaveBalance: (
+    token: string,
+    body: { employeeId: number; schoolId: number; leaveTypeId: number; targetBalance: number }
+  ) => request<{ balance: number }>("/hr/leave/adjust-balance", { method: "POST", body: JSON.stringify(body), token }),
 
   getHrLookup: (token: string, category: import("./types").HrLookupCategory, schoolId?: number) =>
     request<{ items: import("./types").HrLookupItem[] }>(

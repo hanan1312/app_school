@@ -1,23 +1,17 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Building2, Briefcase, Users, UserSquare2, Plus, Pencil, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Building2, Briefcase, Users, UserSquare2, Plus, Pencil, Trash2, Menu } from "lucide-react";
 import type { HrOrgDivision, HrOrgSection } from "../../lib/types";
 import { useHrOrg, type HrOrgSelection } from "../../context/HrOrgContext";
 import { useSchools } from "../../context/SchoolsContext";
 import { AddInline, RenameInline, ConfirmDeleteDialog, RowActionButton } from "../TreeControls";
 
 function JobRow({
-  division,
-  section,
-  jobId,
   job,
   active,
   onSelect,
   onRename,
   onDelete,
 }: {
-  division: string;
-  section: string;
-  jobId: number;
   job: string;
   active: boolean;
   onSelect: () => void;
@@ -176,9 +170,6 @@ function SectionRow({
           {section.jobs.map((j) => (
             <JobRow
               key={j.id}
-              division={division.division}
-              section={section.section}
-              jobId={j.id}
               job={j.job}
               active={
                 selection.type === "job" &&
@@ -324,7 +315,13 @@ function DivisionRow({
   );
 }
 
-export default function HrEmployeeTree() {
+export default function HrEmployeeTree({
+  collapsed = false,
+  onToggleCollapsed,
+}: {
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
+}) {
   const { tree, selection, setSelection, createDivision } = useHrOrg();
   const { selectedSchool } = useSchools();
   const [addingDivision, setAddingDivision] = useState(false);
@@ -332,43 +329,53 @@ export default function HrEmployeeTree() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-3 py-2.5 text-xs font-bold uppercase tracking-wide text-slate-500">
-        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-brand-50 text-brand-600">
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-brand-50 text-brand-600">
           <Building2 size={11} />
         </span>
-        Employees
+        {!collapsed && <span className="flex-1 truncate">Employees</span>}
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          title={collapsed ? "Expand panel" : "Collapse panel"}
+          className="ml-auto shrink-0 rounded-md p-1 text-slate-400 transition hover:bg-brand-50 hover:text-brand-600"
+        >
+          <Menu size={14} />
+        </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-1.5 py-2 text-sm">
-        <div className="group mb-1 flex items-center rounded-md">
-          <button
-            onClick={() => setSelection({ type: "all" })}
-            className={`flex flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-left font-medium transition ${
-              selection.type === "all"
-                ? "bg-gradient-to-r from-brand-50 to-brand-100/60 text-brand-700 shadow-sm"
-                : "text-slate-700 hover:bg-slate-100"
-            }`}
-          >
-            <Building2 size={15} className="text-brand-600" />
-            <span className="truncate">{selectedSchool?.name ?? "My School"}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setAddingDivision(true)}
-            title="Add division"
-            className="shrink-0 rounded-md p-1.5 text-slate-400 transition hover:bg-brand-50 hover:text-brand-600"
-          >
-            <Plus size={14} />
-          </button>
+      {!collapsed && (
+        <div className="flex-1 overflow-y-auto px-1.5 py-2 text-sm">
+          <div className="group mb-1 flex items-center rounded-md">
+            <button
+              onClick={() => setSelection({ type: "all" })}
+              className={`flex flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-left font-medium transition ${
+                selection.type === "all"
+                  ? "bg-gradient-to-r from-brand-50 to-brand-100/60 text-brand-700 shadow-sm"
+                  : "text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              <Building2 size={15} className="text-brand-600" />
+              <span className="truncate">{selectedSchool?.name ?? "My School"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAddingDivision(true)}
+              title="Add division"
+              className="shrink-0 rounded-md p-1.5 text-slate-400 transition hover:bg-brand-50 hover:text-brand-600"
+            >
+              <Plus size={14} />
+            </button>
+          </div>
+
+          {addingDivision && (
+            <AddInline placeholder="New division name" onAdd={createDivision} onDone={() => setAddingDivision(false)} />
+          )}
+
+          {tree.map((division) => (
+            <DivisionRow key={division.id} division={division} selection={selection} onSelect={setSelection} />
+          ))}
         </div>
-
-        {addingDivision && (
-          <AddInline placeholder="New division name" onAdd={createDivision} onDone={() => setAddingDivision(false)} />
-        )}
-
-        {tree.map((division) => (
-          <DivisionRow key={division.id} division={division} selection={selection} onSelect={setSelection} />
-        ))}
-      </div>
+      )}
     </div>
   );
 }

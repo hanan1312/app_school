@@ -349,7 +349,6 @@ export default function StudentsPage() {
           students={students}
           loading={loading}
           onEdit={setEditing}
-          onDelete={(s) => setPendingDelete([s])}
           onDeleteMany={setPendingDelete}
           onRowClick={setExpendItemsStudent}
         />

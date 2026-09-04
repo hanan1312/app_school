@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useClasses } from "../../context/ClassesContext";
 import { api, ApiError } from "../../lib/api";
 import type { DailyPeriod, Subject, TimetableEntry, TimetableTeacher } from "../../lib/types";
+import TeacherSummaryModal from "./TeacherSummaryModal";
 
 const DAY_LABELS = ["الاحد", "الاثنين", "الثلاثاء", "الاربعاء", "الخميس"];
 
@@ -31,6 +32,7 @@ export default function ClassTimetableEditor({ initialClassId, onBack }: Props) 
   const [editingCell, setEditingCell] = useState<{ day: number; periodNo: number } | null>(null);
   const [cellSubjectId, setCellSubjectId] = useState<number | "">("");
   const [cellTeacherId, setCellTeacherId] = useState<number | "">("");
+  const [summaryTeacherId, setSummaryTeacherId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!initialClassId || tree.length === 0) return;
@@ -339,7 +341,9 @@ export default function ClassTimetableEditor({ initialClassId, onBack }: Props) 
                     {teacherStats.map((t) => (
                       <tr key={t.id}>
                         <td className="px-2 py-1.5 text-slate-700" dir="rtl">
-                          {t.name}
+                          <button type="button" onClick={() => setSummaryTeacherId(t.id)} className="hover:underline">
+                            {t.name}
+                          </button>
                         </td>
                         <td className="px-2 py-1.5 text-right text-slate-500">{t.target}</td>
                         <td className="px-2 py-1.5 text-right text-slate-500">{t.actual}</td>
@@ -373,20 +377,39 @@ export default function ClassTimetableEditor({ initialClassId, onBack }: Props) 
                         const color = entry?.subject_id
                           ? subjects.find((s) => s.id === entry.subject_id)?.color
                           : null;
+                        const teacherId = entry?.teacher_id ?? null;
                         return (
                           <td key={p.id} className="px-1 py-1 align-top">
-                            <button
-                              onClick={() => openCell(day, p.period_no)}
-                              disabled={posted}
-                              style={entry && color ? { color } : undefined}
-                              className={`h-12 w-full rounded-lg border px-1 text-[11px] font-medium transition ${
+                            <div
+                              className={`flex h-12 w-full flex-col overflow-hidden rounded-lg border text-[11px] font-medium transition ${
                                 entry
-                                  ? `border-slate-200 bg-white hover:border-slate-300 ${color ? "" : "text-slate-700"}`
+                                  ? "border-slate-200 bg-white hover:border-slate-300"
                                   : "border-dashed border-slate-200 text-slate-300 hover:border-brand-300 hover:text-brand-400"
-                              } disabled:cursor-not-allowed disabled:opacity-60`}
+                              }`}
                             >
-                              {entry ? entry.subject : "+"}
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() => openCell(day, p.period_no)}
+                                disabled={posted}
+                                style={entry && color ? { color } : undefined}
+                                className={`flex-1 px-1 text-center ${
+                                  entry && !color ? "text-slate-700" : ""
+                                } disabled:cursor-not-allowed disabled:opacity-60`}
+                              >
+                                {entry ? entry.subject : "+"}
+                              </button>
+                              {teacherId && entry?.teacher_name && (
+                                <button
+                                  type="button"
+                                  onClick={() => setSummaryTeacherId(teacherId)}
+                                  title={entry.teacher_name}
+                                  dir="rtl"
+                                  className="truncate border-t border-slate-100 px-1 text-[9px] font-normal text-slate-400 transition hover:text-brand-600 hover:underline"
+                                >
+                                  {entry.teacher_name}
+                                </button>
+                              )}
+                            </div>
                           </td>
                         );
                       })}
@@ -511,6 +534,10 @@ export default function ClassTimetableEditor({ initialClassId, onBack }: Props) 
           </button>
         </div>
       </div>
+
+      {summaryTeacherId != null && (
+        <TeacherSummaryModal employeeId={summaryTeacherId} onClose={() => setSummaryTeacherId(null)} />
+      )}
     </div>
   );
 }

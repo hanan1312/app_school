@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { GraduationCap, LogOut } from "lucide-react";
+import { GraduationCap, LogOut, ChevronDown, KeyRound } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import ClassTree from "./ClassTree";
 import HrEmployeeTree from "./hr/HrEmployeeTree";
@@ -8,6 +9,7 @@ import { useSettings } from "../context/SettingsContext";
 import { assetUrl } from "../lib/api";
 import { MODULES, SECTIONS, type SectionKey } from "../lib/modules";
 import BackgroundWatermark from "./BackgroundWatermark";
+import ChangePasswordModal from "./ChangePasswordModal";
 
 function sectionForPath(pathname: string): SectionKey {
   const match = MODULES.find((m) => m.path === pathname || (m.path !== "/" && pathname.startsWith(m.path)));
@@ -48,12 +50,30 @@ export default function DashboardLayout() {
   const navigate = useNavigate();
   const [notice, setNotice] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<SectionKey>(() => sectionForPath(pathname));
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [accountMenuRect, setAccountMenuRect] = useState<DOMRect | null>(null);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const accountBtnRef = useRef<HTMLButtonElement>(null);
+  const accountMenuPanelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!accountMenuRect) return;
+    const closeIfOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (accountBtnRef.current?.contains(target) || accountMenuPanelRef.current?.contains(target)) return;
+      setAccountMenuRect(null);
+    };
+    document.addEventListener("mousedown", closeIfOutside);
+    return () => document.removeEventListener("mousedown", closeIfOutside);
+  }, [accountMenuRect]);
 
   useEffect(() => {
     setActiveSection(sectionForPath(pathname));
   }, [pathname]);
 
-  const sectionModules = MODULES.filter((m) => m.section === activeSection);
+  // "Users" (key "control") stays a real, reachable module — it's just hidden from this tab
+  // row per product request, not removed from permissions/routing.
+  const sectionModules = MODULES.filter((m) => m.section === activeSection && m.key !== "control");
 
   // A section tab is chrome, not a page by itself — switching it has to navigate into that
   // section's first accessible module, otherwise the module-tab row, sidebar tree and section
@@ -97,11 +117,47 @@ export default function DashboardLayout() {
         </div>
 
         <div className="relative flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-xs font-semibold text-white ring-2 ring-white/15">
-              {user?.full_name?.slice(0, 1) ?? "?"}
-            </div>
-            <span className="hidden text-sm font-medium text-white sm:inline">{user?.full_name}</span>
+          <div className="relative">
+            <button
+              ref={accountBtnRef}
+              onClick={() =>
+                setAccountMenuRect((prev) => (prev ? null : accountBtnRef.current?.getBoundingClientRect() ?? null))
+              }
+              className="flex items-center gap-2 rounded-lg px-1.5 py-1 transition hover:bg-white/10"
+            >
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-xs font-semibold text-white ring-2 ring-white/15">
+                {user?.full_name?.slice(0, 1) ?? "?"}
+              </div>
+              <span className="hidden text-sm font-medium text-white sm:inline">{user?.full_name}</span>
+              <ChevronDown size={14} className="text-white/50" />
+            </button>
+
+            {accountMenuRect &&
+              createPortal(
+                <div
+                  ref={accountMenuPanelRef}
+                  style={{ position: "fixed", top: accountMenuRect.bottom + 8, right: window.innerWidth - accountMenuRect.right }}
+                  className="animate-scale-in z-50 w-52 origin-top-right rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl ring-1 ring-black/5"
+                >
+                  {user?.role === "master" ? (
+                    <p className="px-3 py-2 text-xs text-slate-400">
+                      Master account password is changed via master-account.json.
+                    </p>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setAccountMenuRect(null);
+                        setChangePasswordOpen(true);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-600 transition hover:bg-brand-50 hover:text-brand-700"
+                    >
+                      <KeyRound size={14} />
+                      Change Password
+                    </button>
+                  )}
+                </div>,
+                document.body
+              )}
           </div>
           <button
             onClick={() => {
@@ -180,8 +236,19 @@ export default function DashboardLayout() {
       )}
 
       <div className="relative z-10 flex min-h-0 flex-1">
-        <aside className="hidden w-80 shrink-0 border-r border-slate-200 bg-white/95 shadow-sm md:block">
-          {activeSection === "hrStaff" ? <HrEmployeeTree /> : <ClassTree />}
+        <aside
+          className={`hidden shrink-0 border-r border-slate-200 bg-white/95 shadow-sm transition-[width] duration-200 md:block ${
+            sidebarCollapsed ? "w-12" : "w-80"
+          }`}
+        >
+          {activeSection === "hrStaff" ? (
+            <HrEmployeeTree
+              collapsed={sidebarCollapsed}
+              onToggleCollapsed={() => setSidebarCollapsed((v) => !v)}
+            />
+          ) : (
+            <ClassTree collapsed={sidebarCollapsed} onToggleCollapsed={() => setSidebarCollapsed((v) => !v)} />
+          )}
         </aside>
 
         <main className="min-w-0 flex-1 overflow-y-auto">
@@ -196,6 +263,8 @@ export default function DashboardLayout() {
         licenseTo={settings.license_to || schoolName}
         academicYear={settings.academic_year || ""}
       />
+
+      {changePasswordOpen && <ChangePasswordModal onClose={() => setChangePasswordOpen(false)} />}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useSchools } from "../../context/SchoolsContext";
 import { api, ApiError } from "../../lib/api";
 import type { HrAttendanceRecord, HrAttendanceStatus, HrDayClosed, HrOverallRow } from "../../lib/types";
+import TimePicker from "../TimePicker";
 
 const TABS = [
   { key: "daily", label: "Daily Attendance", icon: CalendarCheck },
@@ -247,12 +248,11 @@ export default function HrAttendanceModal({ onClose }: { onClose: () => void }) 
                           </td>
                           <td className="px-3 py-1.5">
                             {tab === "daily" ? (
-                              <input
-                                type="time"
+                              <TimePicker
                                 disabled={closed}
                                 value={r.check_in ?? ""}
-                                onChange={(e) => setTime(r.employee_id, "check_in", e.target.value)}
-                                className="w-28 rounded-md border border-slate-200 px-2 py-1 text-xs outline-none disabled:bg-slate-50"
+                                onChange={(v) => setTime(r.employee_id, "check_in", v)}
+                                className="w-28 text-xs"
                               />
                             ) : (
                               r.check_in ?? "—"
@@ -260,12 +260,11 @@ export default function HrAttendanceModal({ onClose }: { onClose: () => void }) 
                           </td>
                           <td className="px-3 py-1.5">
                             {tab === "daily" ? (
-                              <input
-                                type="time"
+                              <TimePicker
                                 disabled={closed}
                                 value={r.check_out ?? ""}
-                                onChange={(e) => setTime(r.employee_id, "check_out", e.target.value)}
-                                className="w-28 rounded-md border border-slate-200 px-2 py-1 text-xs outline-none disabled:bg-slate-50"
+                                onChange={(v) => setTime(r.employee_id, "check_out", v)}
+                                className="w-28 text-xs"
                               />
                             ) : (
                               r.check_out ?? "—"

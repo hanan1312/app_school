@@ -741,12 +741,12 @@ export default function StudentFormModal({ tree, initial, onClose, onSubmit }: P
                           className={disabledInputCls}
                         />
                       </Field>
-                      <Field label="Transferred From">
+                      <Field label="Transfere Out">
                         <select value={values.transferredFrom} onChange={setField("transferredFrom")} className={inputCls}>
                           <option value="">— None —</option>
                         </select>
                       </Field>
-                      <Field label="Transferred In">
+                      <Field label="Transfere In">
                         <select value={values.transferredIn} onChange={setField("transferredIn")} className={inputCls}>
                           <option value="">— None —</option>
                         </select>

@@ -20,7 +20,7 @@ function flattenLevels(tree: ClassStage[]): FlatLevel[] {
   return out;
 }
 
-const emptyForm = { name: "", color: "#6366f1", igSubject: false, weeklyPeriods: 0, price: 0, category: "" };
+const emptyForm = { name: "", color: "#6366f1", igSubject: false, weeklyPeriods: "0", price: "0", category: "" };
 
 export default function SubjectSetupModal({ onClose }: { onClose: () => void }) {
   const { token } = useAuth();
@@ -64,8 +64,8 @@ export default function SubjectSetupModal({ onClose }: { onClose: () => void }) 
       name: s.name,
       color: s.color ?? "#6366f1",
       igSubject: Boolean(s.ig_subject),
-      weeklyPeriods: s.weekly_periods,
-      price: s.price,
+      weeklyPeriods: String(s.weekly_periods),
+      price: String(s.price),
       category: s.category ?? "",
     });
     setLevelIds(new Set(s.level_ids));
@@ -155,7 +155,7 @@ export default function SubjectSetupModal({ onClose }: { onClose: () => void }) 
                     type="number"
                     min={0}
                     value={form.weeklyPeriods}
-                    onChange={(e) => setForm((f) => ({ ...f, weeklyPeriods: Number(e.target.value) }))}
+                    onChange={(e) => setForm((f) => ({ ...f, weeklyPeriods: e.target.value }))}
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500"
                   />
                 </div>
@@ -174,7 +174,7 @@ export default function SubjectSetupModal({ onClose }: { onClose: () => void }) 
                     type="number"
                     min={0}
                     value={form.price}
-                    onChange={(e) => setForm((f) => ({ ...f, price: Number(e.target.value) }))}
+                    onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500"
                   />
                 </div>

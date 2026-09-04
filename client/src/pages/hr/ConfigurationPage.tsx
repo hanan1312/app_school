@@ -28,6 +28,7 @@ import ValuedListModal from "../../components/hr/ValuedListModal";
 import ShiftsListModal from "../../components/hr/ShiftsListModal";
 import HolidaysListModal from "../../components/hr/HolidaysListModal";
 import SchoolsSwitcherModal from "../../components/hr/SchoolsSwitcherModal";
+import LeaveBalanceModal from "../../components/hr/LeaveBalanceModal";
 import type { HrLookupCategory, HrValuedCategory } from "../../lib/types";
 
 type OutletCtx = { notify: (label: string) => void };
@@ -71,14 +72,6 @@ const PAYROLL_SETUP: ValuedTile[] = [
   { kind: "valued", category: "deduction", title: "Deductions", icon: MinusCircle },
 ];
 
-const LEAVE_BALANCE_TILE: ValuedTile = {
-  kind: "valued",
-  category: "leave_type",
-  title: "Leves Balance",
-  icon: CalendarClock,
-  amountLabel: "Annual days",
-};
-
 export default function HrConfigurationPage() {
   useOutletContext<OutletCtx>();
   const navigate = useNavigate();
@@ -86,6 +79,7 @@ export default function HrConfigurationPage() {
   const [shiftsOpen, setShiftsOpen] = useState(false);
   const [holidaysOpen, setHolidaysOpen] = useState(false);
   const [schoolsOpen, setSchoolsOpen] = useState(false);
+  const [leaveBalanceOpen, setLeaveBalanceOpen] = useState(false);
 
   const toButtons = (tiles: Tile[]): RibbonButtonDef[] =>
     tiles.map((t) => ({ label: t.title, icon: t.icon, onClick: () => setOpenTile(t) }));
@@ -100,7 +94,7 @@ export default function HrConfigurationPage() {
           buttons={[
             { label: "Shifts", icon: Clock, onClick: () => setShiftsOpen(true) },
             { label: "Official Holidays", icon: CalendarDays, onClick: () => setHolidaysOpen(true) },
-            { label: "Leves Balance", icon: CalendarClock, onClick: () => setOpenTile(LEAVE_BALANCE_TILE) },
+            { label: "Leves Balance", icon: CalendarClock, onClick: () => setLeaveBalanceOpen(true) },
           ]}
         />
         <RibbonGroup
@@ -144,6 +138,7 @@ export default function HrConfigurationPage() {
       {shiftsOpen && <ShiftsListModal onClose={() => setShiftsOpen(false)} />}
       {holidaysOpen && <HolidaysListModal onClose={() => setHolidaysOpen(false)} />}
       {schoolsOpen && <SchoolsSwitcherModal onClose={() => setSchoolsOpen(false)} />}
+      {leaveBalanceOpen && <LeaveBalanceModal onClose={() => setLeaveBalanceOpen(false)} />}
     </div>
   );
 }

@@ -168,7 +168,91 @@ timetableRouter.delete("/daily-periods/:id", requireAuth, (req, res) => {
   res.status(204).send();
 });
 
-// --- Teachers (Time Table > Teachers, synced read-only from HR & Staff's المدرسين division) ---
+function toMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function toHHMM(totalMinutes: number): string {
+  const wrapped = ((totalMinutes % 1440) + 1440) % 1440;
+  const h = Math.floor(wrapped / 60);
+  const m = wrapped % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+// Re-derives period_no from time order after a break is inserted or removed — a two-phase
+// renumber (push everything past the UNIQUE(period_no) range first) avoids transient
+// collisions while numbers shuffle.
+function renumberDailyPeriods() {
+  const rows = db.prepare("SELECT id FROM daily_periods ORDER BY start_time ASC, id ASC").all() as { id: number }[];
+  const OFFSET = 100000;
+  rows.forEach((r, i) => db.prepare("UPDATE daily_periods SET period_no = ? WHERE id = ?").run(OFFSET + i + 1, r.id));
+  rows.forEach((r, i) => db.prepare("UPDATE daily_periods SET period_no = ? WHERE id = ?").run(i + 1, r.id));
+}
+
+// Sets (or replaces) the single school-wide break: picking a start time + duration drops it
+// into the period sequence at the right time-ordered slot and renumbers around it. Only one
+// break is modeled at a time — calling this again moves it rather than stacking a second one.
+timetableRouter.post("/daily-periods/break", requireAuth, (req, res) => {
+  const b = req.body ?? {};
+  if (!b.startTime || !b.durationMinutes) {
+    return res.status(400).json({ error: "startTime and durationMinutes are required" });
+  }
+  const duration = Number(b.durationMinutes);
+  if (!Number.isFinite(duration) || duration <= 0) {
+    return res.status(400).json({ error: "durationMinutes must be a positive number" });
+  }
+  const endTime = toHHMM(toMinutes(b.startTime) + duration);
+
+  db.prepare("DELETE FROM daily_periods WHERE is_break = 1").run();
+  const maxNo = (db.prepare("SELECT MAX(period_no) as m FROM daily_periods").get() as { m: number | null }).m ?? 0;
+  db.prepare("INSERT INTO daily_periods (period_no, start_time, end_time, is_break) VALUES (?, ?, ?, 1)").run(
+    maxNo + 1,
+    b.startTime,
+    endTime
+  );
+  renumberDailyPeriods();
+
+  const periods = db.prepare("SELECT * FROM daily_periods ORDER BY period_no ASC").all();
+  res.json({ periods });
+});
+
+// Re-lays-out every period's start/end time from the first period's (unchanged) start time,
+// walking period_no order and giving each regular period the same duration while a break row
+// keeps whatever duration it was given when set (its own end minus start).
+timetableRouter.post("/daily-periods/apply-duration", requireAuth, (req, res) => {
+  const b = req.body ?? {};
+  const duration = Number(b.periodDurationMinutes);
+  if (!Number.isFinite(duration) || duration <= 0) {
+    return res.status(400).json({ error: "periodDurationMinutes must be a positive number" });
+  }
+
+  const rows = db.prepare("SELECT * FROM daily_periods ORDER BY period_no ASC").all() as {
+    id: number;
+    start_time: string;
+    end_time: string;
+    is_break: number;
+  }[];
+
+  let cursor = rows.length > 0 ? toMinutes(rows[0].start_time) : 0;
+  for (const row of rows) {
+    const ownDuration = row.is_break ? toMinutes(row.end_time) - toMinutes(row.start_time) : duration;
+    const start = cursor;
+    const end = start + ownDuration;
+    db.prepare("UPDATE daily_periods SET start_time = ?, end_time = ? WHERE id = ?").run(toHHMM(start), toHHMM(end), row.id);
+    cursor = end;
+  }
+
+  const periods = db.prepare("SELECT * FROM daily_periods ORDER BY period_no ASC").all();
+  res.json({ periods });
+});
+
+// --- Teachers (Time Table > Teachers, synced read-only from HR & Staff's Teachers division) ---
+
+// The seeded org tree names this division "المدرسين", but it's a fully editable tree — a
+// school may rename it (e.g. to "Teachers") without losing this sync, so both the seed name
+// and its English translation are recognized, case-insensitively for the Latin one.
+const TEACHER_DIVISION_NAMES = ["المدرسين", "teachers"];
 
 timetableRouter.get("/teachers", requireAuth, (req, res) => {
   const { q } = req.query as { q?: string };
@@ -176,11 +260,12 @@ timetableRouter.get("/teachers", requireAuth, (req, res) => {
   let sql = `
     SELECT hr_employees.id as employee_id, hr_employees.name_ar as name, hr_employees.status as employee_status,
            hr_employees.section as section, hr_employees.subject_id as subject_id,
+           hr_employees.periods_share as periods_share,
            COALESCE(timetable_teacher_overrides.active, 1) as active
     FROM hr_employees
     LEFT JOIN timetable_teacher_overrides ON timetable_teacher_overrides.employee_id = hr_employees.id
-    WHERE hr_employees.division = 'المدرسين'`;
-  const params: any[] = [];
+    WHERE LOWER(hr_employees.division) IN (${TEACHER_DIVISION_NAMES.map(() => "?").join(", ")})`;
+  const params: any[] = [...TEACHER_DIVISION_NAMES];
   if (q) {
     sql += " AND hr_employees.name_ar LIKE ?";
     params.push(`%${q}%`);
@@ -205,6 +290,48 @@ timetableRouter.delete("/teachers/:employeeId/active", requireAuth, (req, res) =
   const employeeId = Number(req.params.employeeId);
   db.prepare("DELETE FROM timetable_teacher_overrides WHERE employee_id = ?").run(employeeId);
   res.json({ ok: true });
+});
+
+// Per-teacher load summary — every class they're assigned to (with session counts) across
+// the whole school, against their HR & Staff "Periods Share" target, plus the overage price
+// (their subject's per-period price × periods over target) when they're over-assigned.
+timetableRouter.get("/teachers/:employeeId/summary", requireAuth, (req, res) => {
+  const employeeId = Number(req.params.employeeId);
+  const employee = db.prepare("SELECT id, name_ar, periods_share, subject_id FROM hr_employees WHERE id = ?").get(
+    employeeId
+  ) as { id: number; name_ar: string; periods_share: number | null; subject_id: number | null } | undefined;
+  if (!employee) return res.status(404).json({ error: "Teacher not found" });
+
+  const subject = employee.subject_id
+    ? (db.prepare("SELECT id, name, price FROM subjects WHERE id = ?").get(employee.subject_id) as
+        | { id: number; name: string; price: number }
+        | undefined) ?? null
+    : null;
+
+  const classes = db
+    .prepare(
+      `SELECT classes.id as class_id, classes.class_name as class_name, COUNT(timetable_entries.id) as sessions
+       FROM timetable_entries
+       JOIN classes ON classes.id = timetable_entries.class_id
+       WHERE timetable_entries.teacher_id = ?
+       GROUP BY classes.id
+       ORDER BY classes.class_name ASC`
+    )
+    .all(employeeId) as { class_id: number; class_name: string; sessions: number }[];
+
+  const totalActual = classes.reduce((sum, c) => sum + c.sessions, 0);
+  const periodsShare = employee.periods_share ?? 0;
+  const remaining = periodsShare - totalActual;
+  const price = remaining < 0 ? Math.abs(remaining) * (subject?.price ?? 0) : 0;
+
+  res.json({
+    employee: { id: employee.id, name: employee.name_ar, periodsShare },
+    subject,
+    classes,
+    totalActual,
+    remaining,
+    price,
+  });
 });
 
 // --- Overview (the Time Table icon's class cards — one row per class, no N+1 calls) ---

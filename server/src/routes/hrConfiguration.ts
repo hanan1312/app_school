@@ -49,7 +49,9 @@ function isValuedCategory(value: string): value is (typeof VALUED_CATEGORIES)[nu
 // school_id.
 hrConfigurationRouter.get("/lookup/:category", requireAuth, (req, res) => {
   const { category } = req.params;
-  if (!isLookupCategory(category)) return res.status(400).json({ error: "Unknown category" });
+  if (typeof category !== "string" || !isLookupCategory(category)) {
+    return res.status(400).json({ error: "Unknown category" });
+  }
   const { schoolId } = req.query as { schoolId?: string };
 
   const rows = db
@@ -95,7 +97,9 @@ hrConfigurationRouter.delete("/lookup/:id", requireAuth, (req, res) => {
 
 hrConfigurationRouter.get("/valued/:category", requireAuth, (req, res) => {
   const { category } = req.params;
-  if (!isValuedCategory(category)) return res.status(400).json({ error: "Unknown category" });
+  if (typeof category !== "string" || !isValuedCategory(category)) {
+    return res.status(400).json({ error: "Unknown category" });
+  }
   const { schoolId } = req.query as { schoolId?: string };
 
   const rows = db

@@ -6,6 +6,7 @@ import { getUserModules, getUserRole, MODULE_KEYS } from "../permissions";
 import { masterAccount } from "../masterAccount";
 import { touchPresenceOnLogin, recordLogout } from "../presence";
 import { recordActivity } from "../activityLog";
+import { isStrongPassword } from "../passwords";
 
 export const authRouter = Router();
 
@@ -128,4 +129,57 @@ authRouter.get("/me", requireAuth, (req: AuthedRequest, res) => {
   if (!row) return res.status(401).json({ error: "User not found" });
 
   res.json({ user: { ...row, modules: getUserModules(row.id, row.role) } });
+});
+
+// Same self-service change as /change-password below, but reachable from the Login page
+// before a session exists — verifies identity via username + current password (the same bar
+// as logging in) instead of a bearer token, so it never needs requireAuth.
+authRouter.post("/reset-password", (req, res) => {
+  const { username, currentPassword, newPassword } = req.body ?? {};
+  if (!username || !currentPassword || !newPassword) {
+    return res.status(400).json({ error: "username, currentPassword and newPassword are required" });
+  }
+  if (username === masterAccount.username) {
+    return res.status(400).json({ error: "The master account's password is changed via master-account.json, not here." });
+  }
+  if (!isStrongPassword(newPassword)) {
+    return res.status(400).json({ error: "New password must be at least 8 characters and include both letters and numbers" });
+  }
+
+  const user = db.prepare("SELECT * FROM users WHERE username = ?").get(username) as
+    | { id: number; password_hash: string }
+    | undefined;
+  if (!user || !bcrypt.compareSync(currentPassword, user.password_hash)) {
+    return res.status(401).json({ error: "Username or current password is incorrect" });
+  }
+
+  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(bcrypt.hashSync(newPassword, 10), user.id);
+  res.json({ ok: true });
+});
+
+// Self-service password change — any authenticated user, regardless of module access, since
+// it only ever touches their own account. The master account isn't a users-table row (its
+// credentials live in master-account.json), so it's explicitly excluded here.
+authRouter.post("/change-password", requireAuth, (req: AuthedRequest, res) => {
+  if (req.user?.role === "master") {
+    return res.status(400).json({ error: "The master account's password is changed via master-account.json, not here." });
+  }
+
+  const { currentPassword, newPassword } = req.body ?? {};
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: "currentPassword and newPassword are required" });
+  }
+  if (!isStrongPassword(newPassword)) {
+    return res.status(400).json({ error: "New password must be at least 8 characters and include both letters and numbers" });
+  }
+
+  const user = db.prepare("SELECT * FROM users WHERE id = ?").get(req.user!.id) as
+    | { id: number; password_hash: string }
+    | undefined;
+  if (!user || !bcrypt.compareSync(currentPassword, user.password_hash)) {
+    return res.status(401).json({ error: "Current password is incorrect" });
+  }
+
+  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(bcrypt.hashSync(newPassword, 10), user.id);
+  res.json({ ok: true });
 });

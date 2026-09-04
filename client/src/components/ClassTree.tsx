@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, School, Layers, Users, Plus, Pencil, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, School, Layers, Users, Plus, Pencil, Trash2, Menu } from "lucide-react";
 import type { ClassLevel, ClassStage } from "../lib/types";
 import { useClasses, type ClassSelection } from "../context/ClassesContext";
 import { AddInline, RenameInline, ConfirmDeleteDialog, RowActionButton } from "./TreeControls";
@@ -303,50 +303,66 @@ function StageRow({
   );
 }
 
-export default function ClassTree() {
+export default function ClassTree({
+  collapsed = false,
+  onToggleCollapsed,
+}: {
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
+}) {
   const { tree, selection, setSelection, createStage } = useClasses();
   const [addingStage, setAddingStage] = useState(false);
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-3 py-2.5 text-xs font-bold uppercase tracking-wide text-slate-500">
-        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-brand-50 text-brand-600">
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-brand-50 text-brand-600">
           <Layers size={11} />
         </span>
-        Hierarchy of Classes
+        {!collapsed && <span className="flex-1 truncate">Hierarchy of Classes</span>}
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          title={collapsed ? "Expand panel" : "Collapse panel"}
+          className="ml-auto shrink-0 rounded-md p-1 text-slate-400 transition hover:bg-brand-50 hover:text-brand-600"
+        >
+          <Menu size={14} />
+        </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-1.5 py-2 text-sm">
-        <div className="group mb-1 flex items-center rounded-md">
-          <button
-            onClick={() => setSelection({ type: "all" })}
-            className={`flex flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-left font-medium transition ${
-              selection.type === "all"
-                ? "bg-gradient-to-r from-brand-50 to-brand-100/60 text-brand-700 shadow-sm"
-                : "text-slate-700 hover:bg-slate-100"
-            }`}
-          >
-            <School size={15} className="text-brand-600" />
-            My School
-          </button>
-          <button
-            type="button"
-            onClick={() => setAddingStage(true)}
-            title="Add category (stage)"
-            className="shrink-0 rounded-md p-1.5 text-slate-400 transition hover:bg-brand-50 hover:text-brand-600"
-          >
-            <Plus size={14} />
-          </button>
+      {!collapsed && (
+        <div className="flex-1 overflow-y-auto px-1.5 py-2 text-sm">
+          <div className="group mb-1 flex items-center rounded-md">
+            <button
+              onClick={() => setSelection({ type: "all" })}
+              className={`flex flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-left font-medium transition ${
+                selection.type === "all"
+                  ? "bg-gradient-to-r from-brand-50 to-brand-100/60 text-brand-700 shadow-sm"
+                  : "text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              <School size={15} className="text-brand-600" />
+              My School
+            </button>
+            <button
+              type="button"
+              onClick={() => setAddingStage(true)}
+              title="Add category (stage)"
+              className="shrink-0 rounded-md p-1.5 text-slate-400 transition hover:bg-brand-50 hover:text-brand-600"
+            >
+              <Plus size={14} />
+            </button>
+          </div>
+
+          {addingStage && (
+            <AddInline placeholder="New category name" onAdd={createStage} onDone={() => setAddingStage(false)} />
+          )}
+
+          {tree.map((stageNode) => (
+            <StageRow key={stageNode.id} stage={stageNode} selection={selection} onSelect={setSelection} />
+          ))}
         </div>
-
-        {addingStage && (
-          <AddInline placeholder="New category name" onAdd={createStage} onDone={() => setAddingStage(false)} />
-        )}
-
-        {tree.map((stageNode) => (
-          <StageRow key={stageNode.id} stage={stageNode} selection={selection} onSelect={setSelection} />
-        ))}
-      </div>
+      )}
     </div>
   );
 }

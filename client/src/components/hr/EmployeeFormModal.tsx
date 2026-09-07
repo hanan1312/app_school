@@ -10,6 +10,7 @@ import {
   GraduationCap,
   Landmark,
   Sparkles,
+  Plus,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useSchools } from "../../context/SchoolsContext";
@@ -21,6 +22,7 @@ import type { HrEmployee, HrEmployeeInput, HrLookupItem, HrValuedItem } from "..
 import { isTeacherDivisionName, isPrincipalDivisionName, deriveEmployeeTitle } from "../../lib/hrEmployeeTitle";
 import { useSubjects } from "../../lib/useSubjects";
 import { Section, Field, inputCls } from "../FormLayout";
+import { AddInline } from "../TreeControls";
 
 const STAFF_DIVISION = "Staff";
 const STAFF_ROLES = [
@@ -293,9 +295,19 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
   const educations = useLookupOptions("education", selectedSchoolId);
   const universities = useLookupOptions("university", selectedSchoolId);
   const banks = useLookupOptions("bank", selectedSchoolId);
-  // "Department" lists the Stages from the Student's Affair "My School" hierarchy (its
-  // subdivisions), not the old hr_lookup_items "department" catalog.
+  // "Department" primarily lists the Stages from the Student's Affair "My School" hierarchy,
+  // plus any extra names added on the fly below via the (global, school-independent)
+  // hr_lookup_items "department" catalog — the same catalog category Country/Area/etc. use,
+  // just not previously wired up here. `addedDepartments` mirrors what was just created so a
+  // brand-new name is immediately selectable without waiting on a refetch.
   const { tree: classTree } = useClasses();
+  const departmentLookups = useLookupOptions("department", selectedSchoolId);
+  const [addedDepartments, setAddedDepartments] = useState<string[]>([]);
+  const [addingDepartment, setAddingDepartment] = useState(false);
+  const departmentOptions = useMemo(() => {
+    const names = [...classTree.map((s) => s.stage), ...departmentLookups.map((d) => d.name), ...addedDepartments];
+    return Array.from(new Set(names));
+  }, [classTree, departmentLookups, addedDepartments]);
 
   // Division/Section/مرحلة (Job) come from the manageable org tree (the Employees sidebar
   // tree), not a flat catalog — a cascading pick, mirroring how a student's class hierarchy
@@ -342,6 +354,12 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
 
   const { token } = useAuth();
   const subjects = useSubjects();
+  const handleAddDepartment = async (name: string) => {
+    if (!token) throw new Error("Not signed in.");
+    const res = await api.createHrLookup(token, { category: "department", name });
+    setAddedDepartments((prev) => [...prev, res.item.name]);
+    setValues((v) => ({ ...v, department: res.item.name }));
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -684,14 +702,33 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
                   </Field>
                 )}
                 <Field label="Department">
-                  <select value={values.department} onChange={setField("department")} className={selectCls}>
-                    <option value="">—</option>
-                    {classTree.map((s) => (
-                      <option key={s.id} value={s.stage}>
-                        {s.stage}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex items-center gap-1.5">
+                    <select value={values.department} onChange={setField("department")} className={selectCls}>
+                      <option value="">—</option>
+                      {departmentOptions.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setAddingDepartment(true)}
+                      title="Add a new department"
+                      className="shrink-0 rounded-lg border border-slate-200 bg-white p-2 text-slate-500 shadow-sm transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                  {addingDepartment && (
+                    <div className="mt-1.5">
+                      <AddInline
+                        placeholder="New department name"
+                        onAdd={handleAddDepartment}
+                        onDone={() => setAddingDepartment(false)}
+                      />
+                    </div>
+                  )}
                 </Field>
                 <Field label="Status">
                   <select value={values.status} onChange={setField("status")} className={selectCls}>

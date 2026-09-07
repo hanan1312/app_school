@@ -79,6 +79,9 @@ function mapEmployeeImportRow(
 function selectionLabel(selection: HrOrgSelection): string | null {
   if (selection.type === "all") return null;
   if (selection.type === "division") return selection.division;
+  // The Title is already a self-describing, fully-composed label (e.g. "Prencipal رياض
+  // اطفال") — prefixing it with the division again would just repeat it.
+  if (selection.type === "title") return selection.title;
   if (selection.type === "section") return `${selection.division} / ${selection.section}`;
   return `${selection.division} / ${selection.section} / ${selection.job}`;
 }
@@ -89,6 +92,7 @@ function matchesSelection(e: HrEmployee, selection: HrOrgSelection): boolean {
   if (selection.type === "all") return true;
   if ((e.division || UNSPECIFIED) !== selection.division) return false;
   if (selection.type === "division") return true;
+  if (selection.type === "title") return (e.title || UNSPECIFIED) === selection.title;
   if ((e.section || UNSPECIFIED) !== selection.section) return false;
   if (selection.type === "section") return true;
   return (e.job || UNSPECIFIED) === selection.job;

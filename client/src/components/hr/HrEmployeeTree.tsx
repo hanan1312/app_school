@@ -4,8 +4,9 @@ import type { HrEmployee, HrOrgDivision, HrOrgSection, Subject } from "../../lib
 import { useHrOrg, type HrOrgSelection } from "../../context/HrOrgContext";
 import { useHrEmployees } from "../../context/HrEmployeesContext";
 import { useSchools } from "../../context/SchoolsContext";
+import { useClasses } from "../../context/ClassesContext";
 import { AddInline, RenameInline, ConfirmDeleteDialog, RowActionButton } from "../TreeControls";
-import { isHeadmasterDivisionName, isTeacherDivisionName } from "../../lib/hrEmployeeTitle";
+import { isHeadmasterDivisionName, isTeacherDivisionName, isPrincipalDivisionName, deriveEmployeeTitle } from "../../lib/hrEmployeeTitle";
 import { useSubjects } from "../../lib/useSubjects";
 
 // Mirrors EmployeeFormModal.tsx's synthetic "Staff" Division option — it isn't a real
@@ -111,6 +112,58 @@ function TeacherSubjectRow({
       {open && (
         <div className="ml-3 border-l border-slate-200 pl-2">
           <DivisionEmployeeTitles employees={subjectEmployees} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The Principals/deputies division's Title is "<Division> <Department>" (see
+// deriveEmployeeTitle) with no Section involved at all (its Section picker is hidden — see
+// EmployeeFormModal.tsx), so — mirroring TeacherSubjectRow's use of the Subjects catalog — each
+// possible Department (the Student's Affair Stage catalog) becomes a clickable sub-node here,
+// pre-labeled with the exact Title an employee in that department would get. Matches by the
+// employee's own stored Title text rather than recomputing per-employee, so a manually
+// overridden Title (see EmployeeFormModal.tsx's editable Title field) still lands correctly.
+function TitleSubdivisionRow({
+  division,
+  computedTitle,
+  employees,
+  selection,
+  onSelect,
+}: {
+  division: HrOrgDivision;
+  computedTitle: string;
+  employees: HrEmployee[];
+  selection: HrOrgSelection;
+  onSelect: (selection: HrOrgSelection) => void;
+}) {
+  const [open, setOpen] = useState(true);
+  const titleEmployees = employees.filter(
+    (e) => (e.title ?? "").trim() === computedTitle.trim() && (e.division ?? "").trim() === division.division.trim()
+  );
+  const active = selection.type === "title" && selection.division === division.division && selection.title === computedTitle;
+
+  return (
+    <div>
+      <button
+        onClick={() => {
+          setOpen((o) => !o);
+          onSelect({ type: "title", division: division.division, title: computedTitle });
+        }}
+        className={`flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left transition ${
+          active ? "bg-gradient-to-r from-brand-50 to-brand-100/60 font-medium text-brand-700 shadow-sm" : "text-slate-600 hover:bg-slate-100"
+        }`}
+      >
+        {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        <UserSquare2 size={13} className={active ? "text-brand-600" : "text-slate-400"} />
+        <span className="truncate" dir="rtl">
+          {computedTitle}
+        </span>
+      </button>
+      {open && (
+        <div className="ml-3 border-l border-slate-200 pl-2">
+          <DivisionEmployeeTitles employees={titleEmployees} flat />
         </div>
       )}
     </div>
@@ -345,6 +398,8 @@ function DivisionRow({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const active = selection.type === "division" && selection.division === division.division;
   const isTeacherDiv = isTeacherDivisionName(division.division);
+  const isPrincipalDiv = isPrincipalDivisionName(division.division);
+  const { tree: classTree } = useClasses();
 
   if (editing) {
     return (
@@ -388,7 +443,7 @@ function DivisionRow({
             {division.division}
           </span>
         </button>
-        {!isTeacherDiv && (
+        {!isTeacherDiv && !isPrincipalDiv && (
           <RowActionButton
             title={`Add section in ${division.division}`}
             onClick={(e) => {
@@ -427,6 +482,34 @@ function DivisionRow({
             subjects.map((s) => (
               <TeacherSubjectRow key={s.id} division={division} subject={s} employees={employees} selection={selection} onSelect={onSelect} />
             ))
+          ) : isPrincipalDiv ? (
+            (() => {
+              const departmentTitles = classTree.map((stage) => deriveEmployeeTitle(division.division, "", stage.stage));
+              const departmentTitleSet = new Set(departmentTitles.map((t) => t.trim()));
+              return (
+                <>
+                  {classTree.map((stage, i) => (
+                    <TitleSubdivisionRow
+                      key={stage.id}
+                      division={division}
+                      computedTitle={departmentTitles[i]}
+                      employees={employees}
+                      selection={selection}
+                      onSelect={onSelect}
+                    />
+                  ))}
+                  {/* Catches anyone with no Department set, or a manually-overridden Title
+                      that doesn't match any Department-derived one above. */}
+                  <DivisionEmployeeTitles
+                    employees={employees.filter(
+                      (e) =>
+                        (e.division ?? "").trim() === division.division.trim() &&
+                        !departmentTitleSet.has((e.title ?? "").trim())
+                    )}
+                  />
+                </>
+              );
+            })()
           ) : (
             <>
               {division.sections.map((s) => (

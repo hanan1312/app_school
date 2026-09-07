@@ -8,7 +8,8 @@ export type HrOrgSelection =
   | { type: "all" }
   | { type: "division"; division: string }
   | { type: "section"; division: string; section: string }
-  | { type: "job"; division: string; section: string; job: string };
+  | { type: "job"; division: string; section: string; job: string }
+  | { type: "title"; division: string; title: string };
 
 type HrOrgContextValue = {
   tree: HrOrgDivision[];

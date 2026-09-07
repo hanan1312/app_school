@@ -17,8 +17,9 @@ import { useHrOrg } from "../../context/HrOrgContext";
 import { useHrEmployees } from "../../context/HrEmployeesContext";
 import { useClasses } from "../../context/ClassesContext";
 import { api, ApiError, assetUrl } from "../../lib/api";
-import type { HrEmployee, HrEmployeeInput, HrLookupItem, HrValuedItem, Subject } from "../../lib/types";
+import type { HrEmployee, HrEmployeeInput, HrLookupItem, HrValuedItem } from "../../lib/types";
 import { isTeacherDivisionName, isPrincipalDivisionName, deriveEmployeeTitle } from "../../lib/hrEmployeeTitle";
+import { useSubjects } from "../../lib/useSubjects";
 import { Section, Field, inputCls } from "../FormLayout";
 
 const STAFF_DIVISION = "Staff";
@@ -340,14 +341,7 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
   };
 
   const { token } = useAuth();
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  useEffect(() => {
-    if (!token) return;
-    api
-      .getSubjects(token)
-      .then((res) => setSubjects(res.subjects))
-      .catch(() => setSubjects([]));
-  }, [token]);
+  const subjects = useSubjects();
 
   useEffect(() => {
     if (!token) return;

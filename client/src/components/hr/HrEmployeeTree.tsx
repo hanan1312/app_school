@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Building2, Briefcase, Users, UserSquare2, Plus, Pencil, Trash2, Menu } from "lucide-react";
-import type { HrEmployee, HrOrgDivision, HrOrgSection } from "../../lib/types";
+import { ChevronDown, ChevronRight, Building2, Briefcase, BookOpen, Users, UserSquare2, Plus, Pencil, Trash2, Menu } from "lucide-react";
+import type { HrEmployee, HrOrgDivision, HrOrgSection, Subject } from "../../lib/types";
 import { useHrOrg, type HrOrgSelection } from "../../context/HrOrgContext";
 import { useHrEmployees } from "../../context/HrEmployeesContext";
 import { useSchools } from "../../context/SchoolsContext";
 import { AddInline, RenameInline, ConfirmDeleteDialog, RowActionButton } from "../TreeControls";
-import { isHeadmasterDivisionName } from "../../lib/hrEmployeeTitle";
+import { isHeadmasterDivisionName, isTeacherDivisionName } from "../../lib/hrEmployeeTitle";
+import { useSubjects } from "../../lib/useSubjects";
 
 // Mirrors EmployeeFormModal.tsx's synthetic "Staff" Division option — it isn't a real
 // hr_org_divisions row unless a school happens to create one literally named "Staff", so the
@@ -62,6 +63,56 @@ function DivisionEmployeeTitles({ employees, flat = false }: { employees: HrEmpl
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// The Teachers division's Position-tab picker sources "Section" from the Time Table > Subjects
+// catalog rather than hr_org_sections (see EmployeeFormModal.tsx) — its hr_org_sections/jobs
+// are vestigial there, so DivisionRow renders one of these per subject instead. Matches
+// employees by subject_id (the real FK, set alongside the section-text mirror when a subject is
+// picked) rather than comparing name text, so a subject rename can never break the grouping.
+function TeacherSubjectRow({
+  division,
+  subject,
+  employees,
+  selection,
+  onSelect,
+}: {
+  division: HrOrgDivision;
+  subject: Subject;
+  employees: HrEmployee[];
+  selection: HrOrgSelection;
+  onSelect: (selection: HrOrgSelection) => void;
+}) {
+  const [open, setOpen] = useState(true);
+  const subjectEmployees = employees.filter(
+    (e) => e.subject_id === subject.id && (e.division ?? "").trim() === division.division.trim()
+  );
+  const active = selection.type === "section" && selection.division === division.division && selection.section === subject.name;
+
+  return (
+    <div>
+      <button
+        onClick={() => {
+          setOpen((o) => !o);
+          onSelect({ type: "section", division: division.division, section: subject.name });
+        }}
+        className={`flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left transition ${
+          active ? "bg-gradient-to-r from-brand-50 to-brand-100/60 font-medium text-brand-700 shadow-sm" : "text-slate-600 hover:bg-slate-100"
+        }`}
+      >
+        {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        <BookOpen size={13} className={active ? "text-brand-600" : "text-slate-400"} />
+        <span className="truncate" dir="rtl">
+          {subject.name}
+        </span>
+      </button>
+      {open && (
+        <div className="ml-3 border-l border-slate-200 pl-2">
+          <DivisionEmployeeTitles employees={subjectEmployees} />
+        </div>
+      )}
     </div>
   );
 }
@@ -276,11 +327,13 @@ function SectionRow({
 function DivisionRow({
   division,
   employees,
+  subjects,
   selection,
   onSelect,
 }: {
   division: HrOrgDivision;
   employees: HrEmployee[];
+  subjects: Subject[];
   selection: HrOrgSelection;
   onSelect: (selection: HrOrgSelection) => void;
 }) {
@@ -291,6 +344,7 @@ function DivisionRow({
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const active = selection.type === "division" && selection.division === division.division;
+  const isTeacherDiv = isTeacherDivisionName(division.division);
 
   if (editing) {
     return (
@@ -334,16 +388,18 @@ function DivisionRow({
             {division.division}
           </span>
         </button>
-        <RowActionButton
-          title={`Add section in ${division.division}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            setOpen(true);
-            setAddingSection(true);
-          }}
-        >
-          <Plus size={13} />
-        </RowActionButton>
+        {!isTeacherDiv && (
+          <RowActionButton
+            title={`Add section in ${division.division}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen(true);
+              setAddingSection(true);
+            }}
+          >
+            <Plus size={13} />
+          </RowActionButton>
+        )}
         <RowActionButton
           title="Rename division"
           onClick={(e) => {
@@ -367,20 +423,28 @@ function DivisionRow({
 
       {open && (
         <div className="ml-3 border-l border-slate-200 pl-2">
-          {division.sections.map((s) => (
-            <SectionRow key={s.id} division={division} section={s} selection={selection} onSelect={onSelect} />
-          ))}
-          {addingSection && (
-            <AddInline
-              placeholder="New section name"
-              onAdd={(name) => createSection(division.id, name)}
-              onDone={() => setAddingSection(false)}
-            />
+          {isTeacherDiv ? (
+            subjects.map((s) => (
+              <TeacherSubjectRow key={s.id} division={division} subject={s} employees={employees} selection={selection} onSelect={onSelect} />
+            ))
+          ) : (
+            <>
+              {division.sections.map((s) => (
+                <SectionRow key={s.id} division={division} section={s} selection={selection} onSelect={onSelect} />
+              ))}
+              {addingSection && (
+                <AddInline
+                  placeholder="New section name"
+                  onAdd={(name) => createSection(division.id, name)}
+                  onDone={() => setAddingSection(false)}
+                />
+              )}
+              <DivisionEmployeeTitles
+                employees={employees.filter((e) => (e.division ?? "").trim() === division.division.trim())}
+                flat={isHeadmasterDivisionName(division.division)}
+              />
+            </>
           )}
-          <DivisionEmployeeTitles
-            employees={employees.filter((e) => (e.division ?? "").trim() === division.division.trim())}
-            flat={isHeadmasterDivisionName(division.division)}
-          />
         </div>
       )}
 
@@ -441,6 +505,7 @@ export default function HrEmployeeTree({
 }) {
   const { tree, selection, setSelection, createDivision } = useHrOrg();
   const { employees } = useHrEmployees();
+  const subjects = useSubjects();
   const { selectedSchool } = useSchools();
   const [addingDivision, setAddingDivision] = useState(false);
   const hasStaffDivision = tree.some((d) => d.division.trim() === STAFF_DIVISION);
@@ -495,6 +560,7 @@ export default function HrEmployeeTree({
               key={division.id}
               division={division}
               employees={employees}
+              subjects={subjects}
               selection={selection}
               onSelect={setSelection}
             />

@@ -14,9 +14,11 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { useSchools } from "../../context/SchoolsContext";
 import { useHrOrg } from "../../context/HrOrgContext";
+import { useHrEmployees } from "../../context/HrEmployeesContext";
 import { useClasses } from "../../context/ClassesContext";
 import { api, ApiError, assetUrl } from "../../lib/api";
 import type { HrEmployee, HrEmployeeInput, HrLookupItem, HrValuedItem, Subject } from "../../lib/types";
+import { isTeacherDivisionName, isPrincipalDivisionName, deriveEmployeeTitle } from "../../lib/hrEmployeeTitle";
 import { Section, Field, inputCls } from "../FormLayout";
 
 const STAFF_DIVISION = "Staff";
@@ -112,15 +114,6 @@ const SNAKE_MAP: Record<TextKey, keyof HrEmployee> = {
   form1Date: "form1_date",
 };
 
-// The seeded org tree's "Teachers" division (see server/src/db.ts's HR_ORG_TREE) — its
-// sections are named "مادة <subject>", one per subject-teaching group. The tree is fully
-// editable, so a school may rename this division (e.g. to "Teachers"); both the seed name and
-// its English translation are recognized here, matching server/src/routes/timetable.ts's
-// GET /teachers query so the two stay in sync.
-const TEACHER_DIVISION_NAMES = new Set(["المدرسين", "teachers"]);
-function isTeacherDivisionName(division: string): boolean {
-  return TEACHER_DIVISION_NAMES.has(division.trim().toLowerCase());
-}
 
 function initialValues(initial?: HrEmployee | null): Record<TextKey, string> {
   const out = {} as Record<TextKey, string>;
@@ -263,6 +256,8 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
   const [staffRole, setStaffRole] = useState(initial?.staff_role ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [duplicateEmployee, setDuplicateEmployee] = useState<HrEmployee | null>(null);
+  const nameArInputRef = useRef<HTMLInputElement>(null);
 
   const [linkedUserId, setLinkedUserId] = useState(initial?.linked_user_id ?? null);
   const [staffCredentials, setStaffCredentials] = useState<{ username: string; password: string } | null>(null);
@@ -277,6 +272,20 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
   // /adjust-balance endpoint.
   const [leaveTypes, setLeaveTypes] = useState<HrValuedItem[]>([]);
   const [leaveBalances, setLeaveBalances] = useState<Record<number, string>>({});
+
+  // Duplicate-entry guard: an employee sharing both the same Name (Ar) and the same ID Number
+  // as another one already in this school is almost certainly a double data-entry, not two
+  // different people (unlike name alone, which legitimately repeats in this dataset) — so the
+  // list is compared against, rather than just relying on the server to reject it.
+  const { employees: schoolEmployees } = useHrEmployees();
+  const findDuplicateEmployee = (): HrEmployee | undefined => {
+    const trimmedName = nameAr.trim();
+    const trimmedId = values.idNumber.trim();
+    if (!trimmedName || !trimmedId) return undefined;
+    return schoolEmployees.find(
+      (e) => e.id !== initial?.id && e.name_ar.trim() === trimmedName && (e.id_number ?? "").trim() === trimmedId
+    );
+  };
 
   const countries = useLookupOptions("country", selectedSchoolId);
   const areas = useLookupOptions("area", selectedSchoolId);
@@ -296,8 +305,27 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
   // cell editor matches teachers to a subject by that id, not by comparing name strings, so
   // renames/casing/Arabic-vs-English naming can never break the match.
   const isTeacherDivision = isTeacherDivisionName(values.division);
+  const isPrincipalDivision = isPrincipalDivisionName(values.division);
   const { tree: orgTree } = useHrOrg();
   const orgDivision = orgTree.find((d) => d.division === values.division);
+
+  // Title auto-fills from Division/Section/Department (see deriveEmployeeTitle) but stays a
+  // normal editable field — typing into it directly switches it to "manual" so further Position
+  // changes stop overwriting the deliberate override (manualTitle, once set, is used verbatim
+  // even if emptied — only "not yet touched" falls back to the live computed value). An
+  // existing employee whose saved Title already diverges from what the formula would produce
+  // from its own stored fields starts in manual mode too, so simply reopening Edit never
+  // silently reverts a manual title back to the computed one.
+  const autoTitle = useMemo(
+    () => deriveEmployeeTitle(values.division, values.section, values.department),
+    [values.division, values.section, values.department]
+  );
+  const [manualTitle, setManualTitle] = useState<string | null>(() => {
+    if (!initial?.title) return null;
+    const computed = deriveEmployeeTitle(initial.division ?? "", initial.section ?? "", initial.department ?? "");
+    return initial.title.trim() !== computed.trim() ? initial.title : null;
+  });
+  const title = manualTitle ?? autoTitle;
 
   const setDivision = (e: ChangeEvent<HTMLSelectElement>) => {
     setValues((v) => ({ ...v, division: e.target.value, section: "", job: "" }));
@@ -377,6 +405,7 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
     department: values.department || undefined,
     job: values.job || undefined,
     status: values.status || undefined,
+    title: title || undefined,
     shift: values.shift || undefined,
     staffRole: staffRole || undefined,
     contractType: values.contractType.trim() || undefined,
@@ -425,6 +454,11 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
       setError("Pick a school first.");
       return;
     }
+    const duplicate = findDuplicateEmployee();
+    if (duplicate) {
+      setDuplicateEmployee(duplicate);
+      return;
+    }
     setSubmitting(true);
     setError(null);
 
@@ -446,6 +480,15 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleRenameDuplicate = () => {
+    setDuplicateEmployee(null);
+    setTab("basic");
+    requestAnimationFrame(() => {
+      nameArInputRef.current?.focus();
+      nameArInputRef.current?.select();
+    });
   };
 
   const selectCls = useMemo(() => inputCls, []);
@@ -500,7 +543,13 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
               <div className="space-y-4 lg:col-span-2">
                 <Section title="Employee Data" icon={UserCircle2}>
                   <Field label="Name (Ar)" span={2}>
-                    <input value={nameAr} onChange={(e) => setNameAr(e.target.value)} className={inputCls} placeholder="Employee full name" />
+                    <input
+                      ref={nameArInputRef}
+                      value={nameAr}
+                      onChange={(e) => setNameAr(e.target.value)}
+                      className={inputCls}
+                      placeholder="Employee full name"
+                    />
                   </Field>
                   <Field label="Name (En)">
                     <input value={values.nameEn} onChange={setField("nameEn")} className={inputCls} />
@@ -605,27 +654,29 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
                     )}
                   </select>
                 </Field>
-                <Field label="Section">
-                  {isTeacherDivision ? (
-                    <select value={teacherSubjectId} onChange={setTeacherSubject} className={selectCls} disabled={!orgDivision} dir="rtl">
-                      <option value="">—</option>
-                      {subjects.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <select value={values.section} onChange={setSection} className={selectCls} disabled={!orgDivision} dir="rtl">
-                      <option value="">—</option>
-                      {orgDivision?.sections.map((s) => (
-                        <option key={s.id} value={s.section}>
-                          {s.section}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </Field>
+                {!isPrincipalDivision && (
+                  <Field label="Section">
+                    {isTeacherDivision ? (
+                      <select value={teacherSubjectId} onChange={setTeacherSubject} className={selectCls} disabled={!orgDivision} dir="rtl">
+                        <option value="">—</option>
+                        {subjects.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <select value={values.section} onChange={setSection} className={selectCls} disabled={!orgDivision} dir="rtl">
+                        <option value="">—</option>
+                        {orgDivision?.sections.map((s) => (
+                          <option key={s.id} value={s.section}>
+                            {s.section}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </Field>
+                )}
                 {isTeacherDivision && (
                   <Field label="Periods Share">
                     <input
@@ -655,6 +706,14 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
                     <option value="on_leave">On Leave</option>
                     <option value="terminated">Terminated</option>
                   </select>
+                </Field>
+                <Field label="Title" span={2}>
+                  <input
+                    value={title}
+                    onChange={(e) => setManualTitle(e.target.value)}
+                    placeholder="Auto-filled from Division/Section/Department — edit to override"
+                    className={inputCls}
+                  />
                 </Field>
                 {values.division === STAFF_DIVISION && (
                   <Field label="Staff Role">
@@ -908,6 +967,34 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
           </div>
         </form>
       </div>
+
+      {duplicateEmployee && (
+        <div className="animate-fade-in fixed inset-0 z-40 flex items-center justify-center bg-ink-950/60 p-4 backdrop-blur-sm">
+          <div className="animate-rise-in w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-black/5">
+            <h3 className="text-sm font-semibold text-slate-800">Possible Duplicate</h3>
+            <p className="mt-1.5 text-sm text-slate-500">
+              An employee named <strong>{duplicateEmployee.name_ar}</strong> with ID{" "}
+              <strong>{duplicateEmployee.id_number}</strong> already exists. Rename this employee, or cancel adding.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDuplicateEmployee(null)}
+                className="rounded-lg border border-slate-200 px-3.5 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleRenameDuplicate}
+                className="rounded-lg bg-brand-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
+              >
+                Rename
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

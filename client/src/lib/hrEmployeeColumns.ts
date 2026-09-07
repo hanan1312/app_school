@@ -12,6 +12,7 @@ export type HrEmployeeColumnKey =
   | "department"
   | "job"
   | "status"
+  | "title"
   | "tel1"
   | "tel2"
   | "email"
@@ -49,6 +50,7 @@ export const HR_EMPLOYEE_COLUMNS: HrEmployeeColumn[] = [
   { key: "department", label: "Department", defaultVisible: true, get: (e) => e.department ?? "" },
   { key: "job", label: "مرحلة", defaultVisible: true, get: (e) => e.job ?? "" },
   { key: "status", label: "Status", defaultVisible: true, get: (e) => e.status ?? "" },
+  { key: "title", label: "Title", defaultVisible: true, get: (e) => e.title ?? "" },
   { key: "tel1", label: "Tel 1", defaultVisible: false, get: (e) => e.tel1 ?? "" },
   { key: "tel2", label: "Tel 2", defaultVisible: false, get: (e) => e.tel2 ?? "" },
   { key: "email", label: "Email", defaultVisible: false, get: (e) => e.email ?? "" },

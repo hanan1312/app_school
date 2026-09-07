@@ -91,6 +91,7 @@ const COLUMNS = [
   "insured_pension",
   "periods_share",
   "staff_role",
+  "title",
 ] as const;
 
 function fromBody(b: Record<string, unknown>) {
@@ -141,6 +142,7 @@ function fromBody(b: Record<string, unknown>) {
     insured_pension: b.insuredPension ? 1 : 0,
     periods_share: b.periodsShare != null && b.periodsShare !== "" ? Number(b.periodsShare) : null,
     staff_role: b.staffRole ?? null,
+    title: b.title ?? null,
   };
 }
 

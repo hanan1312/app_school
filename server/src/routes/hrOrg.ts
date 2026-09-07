@@ -2,9 +2,47 @@ import { Router } from "express";
 import { db } from "../db";
 import { requireAuth } from "../auth";
 import { requireModule } from "../permissions";
+import { deriveEmployeeTitle } from "../hrEmployeeTitle";
 
 export const hrOrgRouter = Router();
 hrOrgRouter.use(requireModule("hrEmployees"));
+
+// Division/Section/Job names are copied as plain text onto hr_employees (division/section/job)
+// rather than referenced live by id, so a rename here would otherwise leave every employee
+// already using the old name — and, for Division, their derived Title (see hrEmployeeTitle.ts)
+// — stale until someone happened to re-open and re-save that employee. These helpers cascade a
+// rename into the matching employee rows in the same transaction as the rename itself.
+function syncEmployeesOnDivisionRename(schoolId: number, oldName: string, newName: string) {
+  const affected = db
+    .prepare("SELECT id, section, department FROM hr_employees WHERE school_id = ? AND TRIM(division) = TRIM(?)")
+    .all(schoolId, oldName) as { id: number; section: string | null; department: string | null }[];
+  if (affected.length === 0) return;
+
+  const update = db.prepare("UPDATE hr_employees SET division = ?, title = ? WHERE id = ?");
+  for (const emp of affected) {
+    const title = deriveEmployeeTitle(newName, emp.section ?? "", emp.department ?? "") || null;
+    update.run(newName, title, emp.id);
+  }
+}
+
+function syncEmployeesOnSectionRename(schoolId: number, divisionName: string, oldName: string, newName: string) {
+  db.prepare(
+    "UPDATE hr_employees SET section = ? WHERE school_id = ? AND TRIM(division) = TRIM(?) AND TRIM(section) = TRIM(?)"
+  ).run(newName, schoolId, divisionName, oldName);
+}
+
+function syncEmployeesOnJobRename(
+  schoolId: number,
+  divisionName: string,
+  sectionName: string,
+  oldName: string,
+  newName: string
+) {
+  db.prepare(
+    `UPDATE hr_employees SET job = ?
+     WHERE school_id = ? AND TRIM(division) = TRIM(?) AND TRIM(section) = TRIM(?) AND TRIM(job) = TRIM(?)`
+  ).run(newName, schoolId, divisionName, sectionName, oldName);
+}
 
 function buildTreeResponse(schoolId: number) {
   const divisions = db
@@ -76,7 +114,14 @@ hrOrgRouter.put("/divisions/:id", requireAuth, (req, res) => {
   const division = db.prepare("SELECT * FROM hr_org_divisions WHERE id = ?").get(id) as any;
   if (!division) return res.status(404).json({ error: "Division not found" });
 
-  db.prepare("UPDATE hr_org_divisions SET name = ? WHERE id = ?").run(name, id);
+  const tx = db.transaction(() => {
+    db.prepare("UPDATE hr_org_divisions SET name = ? WHERE id = ?").run(name, id);
+    if (division.name.trim() !== name.trim()) {
+      syncEmployeesOnDivisionRename(division.school_id, division.name, name);
+    }
+  });
+  tx();
+
   res.json(buildTreeResponse(division.school_id));
 });
 
@@ -124,14 +169,21 @@ hrOrgRouter.put("/sections/:id", requireAuth, (req, res) => {
 
   const section = db
     .prepare(
-      `SELECT hr_org_sections.*, hr_org_divisions.school_id as school_id
+      `SELECT hr_org_sections.*, hr_org_divisions.school_id as school_id, hr_org_divisions.name as division_name
        FROM hr_org_sections JOIN hr_org_divisions ON hr_org_divisions.id = hr_org_sections.division_id
        WHERE hr_org_sections.id = ?`
     )
     .get(id) as any;
   if (!section) return res.status(404).json({ error: "Section not found" });
 
-  db.prepare("UPDATE hr_org_sections SET name = ? WHERE id = ?").run(name, id);
+  const tx = db.transaction(() => {
+    db.prepare("UPDATE hr_org_sections SET name = ? WHERE id = ?").run(name, id);
+    if (section.name.trim() !== name.trim()) {
+      syncEmployeesOnSectionRename(section.school_id, section.division_name, section.name, name);
+    }
+  });
+  tx();
+
   res.json(buildTreeResponse(section.school_id));
 });
 
@@ -190,7 +242,8 @@ hrOrgRouter.put("/jobs/:id", requireAuth, (req, res) => {
 
   const job = db
     .prepare(
-      `SELECT hr_org_jobs.*, hr_org_divisions.school_id as school_id
+      `SELECT hr_org_jobs.*, hr_org_divisions.school_id as school_id,
+              hr_org_divisions.name as division_name, hr_org_sections.name as section_name
        FROM hr_org_jobs
        JOIN hr_org_sections ON hr_org_sections.id = hr_org_jobs.section_id
        JOIN hr_org_divisions ON hr_org_divisions.id = hr_org_sections.division_id
@@ -199,7 +252,14 @@ hrOrgRouter.put("/jobs/:id", requireAuth, (req, res) => {
     .get(id) as any;
   if (!job) return res.status(404).json({ error: "Job not found" });
 
-  db.prepare("UPDATE hr_org_jobs SET name = ? WHERE id = ?").run(name, id);
+  const tx = db.transaction(() => {
+    db.prepare("UPDATE hr_org_jobs SET name = ? WHERE id = ?").run(name, id);
+    if (job.name.trim() !== name.trim()) {
+      syncEmployeesOnJobRename(job.school_id, job.division_name, job.section_name, job.name, name);
+    }
+  });
+  tx();
+
   res.json(buildTreeResponse(job.school_id));
 });
 

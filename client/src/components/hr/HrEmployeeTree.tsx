@@ -1,9 +1,70 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Building2, Briefcase, Users, UserSquare2, Plus, Pencil, Trash2, Menu } from "lucide-react";
-import type { HrOrgDivision, HrOrgSection } from "../../lib/types";
+import type { HrEmployee, HrOrgDivision, HrOrgSection } from "../../lib/types";
 import { useHrOrg, type HrOrgSelection } from "../../context/HrOrgContext";
+import { useHrEmployees } from "../../context/HrEmployeesContext";
 import { useSchools } from "../../context/SchoolsContext";
 import { AddInline, RenameInline, ConfirmDeleteDialog, RowActionButton } from "../TreeControls";
+import { isHeadmasterDivisionName } from "../../lib/hrEmployeeTitle";
+
+// Mirrors EmployeeFormModal.tsx's synthetic "Staff" Division option — it isn't a real
+// hr_org_divisions row unless a school happens to create one literally named "Staff", so the
+// tree renders a non-editable stand-in for it below (see the root component) instead of relying
+// on it showing up in `tree` like every other division does.
+const STAFF_DIVISION = "Staff";
+
+// Read-only listing of this division's employees, added underneath the existing add/rename/
+// delete Section-Job tree rather than replacing it — that tree still drives the Position tab's
+// Section picker for non-Teacher divisions, this block just answers "who is assigned here" at a
+// glance. Headmaster is always a single fixed title ("Headmaster" — see EmployeeFormModal.tsx's
+// deriveEmployeeTitle), which would just repeat the division's own label, so it renders as a
+// flat list of names; every other division groups employees by their derived Title.
+function DivisionEmployeeTitles({ employees, flat = false }: { employees: HrEmployee[]; flat?: boolean }) {
+  if (employees.length === 0) return null;
+
+  if (flat) {
+    return (
+      <div className="ml-3 border-l border-slate-200 pl-2">
+        {employees.map((e) => (
+          <div key={e.id} className="flex items-center gap-1.5 truncate px-2 py-1 text-slate-600" dir="rtl">
+            <UserSquare2 size={12} className="shrink-0 text-slate-400" />
+            <span className="truncate">{e.name_ar}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const groups = new Map<string, HrEmployee[]>();
+  for (const e of employees) {
+    const key = e.title?.trim() || "Untitled";
+    const group = groups.get(key);
+    if (group) group.push(e);
+    else groups.set(key, [e]);
+  }
+
+  return (
+    <div className="ml-3 border-l border-slate-200 pl-2">
+      {Array.from(groups.entries()).map(([titleLabel, group]) => (
+        <div key={titleLabel} className="py-0.5">
+          <div className="flex items-center gap-1.5 px-2 py-1 text-slate-600">
+            <UserSquare2 size={12} className="shrink-0 text-slate-400" />
+            <span className="truncate font-medium" dir="rtl">
+              {titleLabel}
+            </span>
+          </div>
+          <div className="ml-4 border-l border-slate-100 pl-2">
+            {group.map((e) => (
+              <div key={e.id} className="truncate px-2 py-0.5 text-xs text-slate-500" dir="rtl">
+                {e.name_ar}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function JobRow({
   job,
@@ -93,6 +154,7 @@ function SectionRow({
   onSelect: (selection: HrOrgSelection) => void;
 }) {
   const { createJob, renameSection, deleteSection, renameJob, deleteJob } = useHrOrg();
+  const { refresh: refreshEmployees } = useHrEmployees();
   const [open, setOpen] = useState(true);
   const [addingJob, setAddingJob] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -104,7 +166,11 @@ function SectionRow({
       <RenameInline
         initialValue={section.section}
         onSave={async (name) => {
+          // A renamed Section/Job's text is mirrored onto matching hr_employees rows
+          // server-side (see hrOrg.ts) — refresh the already-loaded employees list so the
+          // sidebar's Title grouping and the Employees table pick up the new text right away.
           await renameSection(section.id, name);
+          await refreshEmployees();
           setEditing(false);
         }}
         onCancel={() => setEditing(false)}
@@ -178,7 +244,10 @@ function SectionRow({
                 selection.job === j.job
               }
               onSelect={() => onSelect({ type: "job", division: division.division, section: section.section, job: j.job })}
-              onRename={(name) => renameJob(j.id, name)}
+              onRename={async (name) => {
+                await renameJob(j.id, name);
+                await refreshEmployees();
+              }}
               onDelete={() => deleteJob(j.id)}
             />
           ))}
@@ -206,14 +275,17 @@ function SectionRow({
 
 function DivisionRow({
   division,
+  employees,
   selection,
   onSelect,
 }: {
   division: HrOrgDivision;
+  employees: HrEmployee[];
   selection: HrOrgSelection;
   onSelect: (selection: HrOrgSelection) => void;
 }) {
   const { createSection, renameDivision, deleteDivision } = useHrOrg();
+  const { refresh: refreshEmployees } = useHrEmployees();
   const [open, setOpen] = useState(true);
   const [addingSection, setAddingSection] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -226,7 +298,12 @@ function DivisionRow({
         <RenameInline
           initialValue={division.division}
           onSave={async (name) => {
+            // A renamed Division's text (and, where it changes the formula's result, each
+            // affected employee's derived Title) is synced server-side onto matching
+            // hr_employees rows (see hrOrg.ts) — refresh the already-loaded employees list so
+            // this tree and the Employees table reflect it immediately, not after a reload.
             await renameDivision(division.id, name);
+            await refreshEmployees();
             setEditing(false);
           }}
           onCancel={() => setEditing(false)}
@@ -300,6 +377,10 @@ function DivisionRow({
               onDone={() => setAddingSection(false)}
             />
           )}
+          <DivisionEmployeeTitles
+            employees={employees.filter((e) => (e.division ?? "").trim() === division.division.trim())}
+            flat={isHeadmasterDivisionName(division.division)}
+          />
         </div>
       )}
 
@@ -315,6 +396,42 @@ function DivisionRow({
   );
 }
 
+// Stand-in for DivisionRow when no real "Staff" org division exists yet — same look, but no
+// add-section/rename/delete affordances since there's no hr_org_divisions row backing it.
+function SyntheticStaffDivision({ employees, selection, onSelect }: { employees: HrEmployee[]; selection: HrOrgSelection; onSelect: (selection: HrOrgSelection) => void }) {
+  const [open, setOpen] = useState(true);
+  const active = selection.type === "division" && selection.division === STAFF_DIVISION;
+
+  return (
+    <div className="ml-2">
+      <div
+        className={`group flex items-center rounded-md transition ${
+          active ? "bg-gradient-to-r from-brand-50 to-brand-100/60 shadow-sm" : "hover:bg-slate-100"
+        }`}
+      >
+        <button
+          onClick={() => {
+            setOpen((o) => !o);
+            onSelect({ type: "division", division: STAFF_DIVISION });
+          }}
+          className={`flex flex-1 items-center gap-1.5 px-2 py-1.5 text-left font-medium ${
+            active ? "text-brand-700" : "text-slate-700"
+          }`}
+        >
+          {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          <Users size={14} className={active ? "text-brand-600" : "text-slate-400"} />
+          <span className="truncate">{STAFF_DIVISION}</span>
+        </button>
+      </div>
+      {open && (
+        <div className="ml-3 border-l border-slate-200 pl-2">
+          <DivisionEmployeeTitles employees={employees} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function HrEmployeeTree({
   collapsed = false,
   onToggleCollapsed,
@@ -323,8 +440,10 @@ export default function HrEmployeeTree({
   onToggleCollapsed?: () => void;
 }) {
   const { tree, selection, setSelection, createDivision } = useHrOrg();
+  const { employees } = useHrEmployees();
   const { selectedSchool } = useSchools();
   const [addingDivision, setAddingDivision] = useState(false);
+  const hasStaffDivision = tree.some((d) => d.division.trim() === STAFF_DIVISION);
 
   return (
     <div className="flex h-full flex-col">
@@ -372,8 +491,21 @@ export default function HrEmployeeTree({
           )}
 
           {tree.map((division) => (
-            <DivisionRow key={division.id} division={division} selection={selection} onSelect={setSelection} />
+            <DivisionRow
+              key={division.id}
+              division={division}
+              employees={employees}
+              selection={selection}
+              onSelect={setSelection}
+            />
           ))}
+          {!hasStaffDivision && (
+            <SyntheticStaffDivision
+              employees={employees.filter((e) => (e.division ?? "").trim() === STAFF_DIVISION)}
+              selection={selection}
+              onSelect={setSelection}
+            />
+          )}
         </div>
       )}
     </div>

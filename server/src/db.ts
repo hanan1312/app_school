@@ -553,6 +553,7 @@ const HR_EMPLOYEE_COLUMNS: [string, string][] = [
   ["periods_share", "INTEGER"],
   ["staff_role", "TEXT"],
   ["linked_user_id", "INTEGER REFERENCES users(id)"],
+  ["title", "TEXT"],
 ];
 
 function migrateHrEmployeesColumns() {

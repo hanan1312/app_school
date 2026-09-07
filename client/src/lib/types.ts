@@ -461,6 +461,7 @@ export type HrEmployee = {
   department: string | null;
   job: string | null;
   status: string | null;
+  title: string | null;
   shift: string | null;
   contract_type: string | null;
   contract_from: string | null;
@@ -513,6 +514,7 @@ export type HrEmployeeInput = {
   department?: string;
   job?: string;
   status?: string;
+  title?: string;
   shift?: string;
   contractType?: string;
   contractFrom?: string;

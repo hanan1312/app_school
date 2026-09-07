@@ -2,9 +2,29 @@ import { Router } from "express";
 import { db } from "../db";
 import { requireAuth } from "../auth";
 import { requireModule } from "../permissions";
+import { deriveEmployeeTitle } from "../hrEmployeeTitle";
 
 export const subjectsRouter = Router();
 subjectsRouter.use(requireModule("timetable"));
+
+// A Teacher-division employee's hr_employees.section is a plain-text mirror of their assigned
+// subject's name (copied at pick time — see EmployeeFormModal.tsx's setTeacherSubject), and
+// their derived Title embeds that same name (see hrEmployeeTitle.ts's deriveEmployeeTitle).
+// Renaming the subject itself otherwise leaves both stale until the employee is individually
+// reopened and resaved — mirrors the hr_org_divisions rename cascade in hrOrg.ts. `subjects` has
+// no school_id, so every employee referencing this subject_id is in scope regardless of school.
+function syncEmployeesOnSubjectRename(subjectId: number, newName: string) {
+  const affected = db
+    .prepare("SELECT id, division, department FROM hr_employees WHERE subject_id = ?")
+    .all(subjectId) as { id: number; division: string | null; department: string | null }[];
+  if (affected.length === 0) return;
+
+  const update = db.prepare("UPDATE hr_employees SET section = ?, title = ? WHERE id = ?");
+  for (const emp of affected) {
+    const title = deriveEmployeeTitle(emp.division ?? "", newName, emp.department ?? "") || null;
+    update.run(newName, title, emp.id);
+  }
+}
 
 function withLevelIds(subject: any) {
   const levelIds = (
@@ -67,20 +87,29 @@ subjectsRouter.put("/:id", requireAuth, (req, res) => {
   if (!existing) return res.status(404).json({ error: "Subject not found" });
 
   const b = req.body ?? {};
-  db.prepare(
-    `UPDATE subjects SET name = ?, color = ?, ig_subject = ?, weekly_periods = ?, price = ?, category = ?
-     WHERE id = ?`
-  ).run(
-    b.name ?? existing.name,
-    b.color ?? existing.color,
-    b.igSubject === undefined ? existing.ig_subject : b.igSubject ? 1 : 0,
-    b.weeklyPeriods ?? existing.weekly_periods,
-    b.price ?? existing.price,
-    b.category ?? existing.category,
-    id
-  );
+  const newName = b.name ?? existing.name;
 
-  if (b.levelIds !== undefined) setLevels(id, b.levelIds);
+  const tx = db.transaction(() => {
+    db.prepare(
+      `UPDATE subjects SET name = ?, color = ?, ig_subject = ?, weekly_periods = ?, price = ?, category = ?
+       WHERE id = ?`
+    ).run(
+      newName,
+      b.color ?? existing.color,
+      b.igSubject === undefined ? existing.ig_subject : b.igSubject ? 1 : 0,
+      b.weeklyPeriods ?? existing.weekly_periods,
+      b.price ?? existing.price,
+      b.category ?? existing.category,
+      id
+    );
+
+    if (existing.name.trim() !== newName.trim()) {
+      syncEmployeesOnSubjectRename(id, newName);
+    }
+
+    if (b.levelIds !== undefined) setLevels(id, b.levelIds);
+  });
+  tx();
 
   const subject = db.prepare("SELECT * FROM subjects WHERE id = ?").get(id);
   res.json({ subject: withLevelIds(subject) });

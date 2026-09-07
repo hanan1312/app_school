@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { X, BookMarked, Pencil, Trash2 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useClasses } from "../../context/ClassesContext";
+import { useHrEmployees } from "../../context/HrEmployeesContext";
 import { api, ApiError } from "../../lib/api";
 import type { ClassStage, Subject } from "../../lib/types";
 
@@ -25,6 +26,7 @@ const emptyForm = { name: "", color: "#6366f1", igSubject: false, weeklyPeriods:
 export default function SubjectSetupModal({ onClose }: { onClose: () => void }) {
   const { token } = useAuth();
   const { tree } = useClasses();
+  const { refresh: refreshEmployees } = useHrEmployees();
   const levels = useMemo(() => flattenLevels(tree), [tree]);
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -100,6 +102,10 @@ export default function SubjectSetupModal({ onClose }: { onClose: () => void }) 
         await api.createSubject(token, body);
       } else {
         await api.updateSubject(token, editingId, body);
+        // A renamed subject's name is mirrored server-side onto every hr_employees row
+        // teaching it (section text + derived Title — see subjects.ts's rename cascade) —
+        // refresh the already-loaded employees list so the HR sidebar/table pick it up now.
+        await refreshEmployees();
       }
       resetForm();
       await load();

@@ -13,16 +13,12 @@ export function isHeadmasterDivisionName(division: string): boolean {
   return HEADMASTER_DIVISION_NAMES.has(division.trim().toLowerCase());
 }
 
-const ARABIC_TEXT_RE = /[؀-ۿ]/;
-
-export function deriveEmployeeTitle(division: string, sectionOrSubjectName: string, department: string): string {
+// Headmaster: fixed label. Every other division (Teachers, Staff, Principals/deputies, or
+// anything a school renames the tree to): "<division> <department>" — Teachers' Subject picker
+// intentionally plays no part in Title; it only feeds subject_id.
+export function deriveEmployeeTitle(division: string, department: string): string {
   const trimmedDivision = division.trim();
   if (!trimmedDivision) return "";
   if (isHeadmasterDivisionName(trimmedDivision)) return "Headmaster";
-  if (isTeacherDivisionName(trimmedDivision)) {
-    const subject = (sectionOrSubjectName ?? "").trim();
-    if (!subject) return "";
-    return ARABIC_TEXT_RE.test(subject) ? `مدرس ${subject}` : `${subject} Teacher`;
-  }
   return [trimmedDivision, (department ?? "").trim()].filter(Boolean).join(" ");
 }

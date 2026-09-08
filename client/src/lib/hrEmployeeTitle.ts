@@ -36,21 +36,15 @@ export function isPrincipalDivisionName(division: string): boolean {
   return PRINCIPAL_DIVISION_NAMES.has(division.trim().toLowerCase());
 }
 
-const ARABIC_TEXT_RE = /[؀-ۿ]/;
-
 // Derives the read-only "Title" shown in the Position tab and stored on the employee, so the
 // HR sidebar tree and the employee table can group/display it without recomputing this logic.
-// Headmaster: fixed label. Teachers: "<subject> Teacher", localized to match the subject's own
-// script since subjects can be named in Arabic or English. Every other division (Staff,
-// Principals/deputies, or anything a school renames the tree to): "<division> <department>".
-export function deriveEmployeeTitle(division: string, sectionOrSubjectName: string, department: string): string {
+// Headmaster: fixed label. Every other division (Teachers, Staff, Principals/deputies, or
+// anything a school renames the tree to): "<division> <department>" — Teachers' Subject picker
+// (still labeled "Section" in some places) intentionally plays no part in Title; it only feeds
+// subject_id, used independently by Time Table's teacher-matching.
+export function deriveEmployeeTitle(division: string, department: string): string {
   const trimmedDivision = division.trim();
   if (!trimmedDivision) return "";
   if (isHeadmasterDivisionName(trimmedDivision)) return "Headmaster";
-  if (isTeacherDivisionName(trimmedDivision)) {
-    const subject = sectionOrSubjectName.trim();
-    if (!subject) return "";
-    return ARABIC_TEXT_RE.test(subject) ? `مدرس ${subject}` : `${subject} Teacher`;
-  }
   return [trimmedDivision, department.trim()].filter(Boolean).join(" ");
 }

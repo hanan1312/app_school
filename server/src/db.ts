@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import path from "path";
 import { masterAccount } from "./masterAccount";
+import { isTeacherDivisionName, deriveEmployeeTitle } from "./hrEmployeeTitle";
 
 const dbPath = path.join(__dirname, "..", "school.db");
 export const db = new Database(dbPath);
@@ -565,6 +566,31 @@ function migrateHrEmployeesColumns() {
   }
 }
 
+// One-time (but idempotent — safe to run every boot) backfill for the Title-formula change:
+// a Teacher-division employee's Title used to be built from their assigned Subject
+// ("<subject> Teacher" / "مدرس <subject>"); it's now Division+Department like every other
+// division (see hrEmployeeTitle.ts's deriveEmployeeTitle). Only rewrites a Title that still
+// exactly matches what the OLD subject-based formula would produce from the employee's own
+// stored division/section — anyone whose Title already diverges from that (a deliberate manual
+// override, or already migrated) is left untouched.
+function migrateTeacherTitlesToDepartmentFormula() {
+  const ARABIC_TEXT_RE = /[؀-ۿ]/;
+  const employees = db
+    .prepare("SELECT id, division, section, department, title FROM hr_employees WHERE title IS NOT NULL AND TRIM(title) != ''")
+    .all() as { id: number; division: string | null; section: string | null; department: string | null; title: string | null }[];
+
+  const update = db.prepare("UPDATE hr_employees SET title = ? WHERE id = ?");
+  for (const emp of employees) {
+    if (!isTeacherDivisionName(emp.division ?? "")) continue;
+    const subject = (emp.section ?? "").trim();
+    if (!subject) continue;
+    const oldFormulaTitle = ARABIC_TEXT_RE.test(subject) ? `مدرس ${subject}` : `${subject} Teacher`;
+    if ((emp.title ?? "").trim() !== oldFormulaTitle.trim()) continue;
+    const newTitle = deriveEmployeeTitle(emp.division ?? "", emp.department ?? "") || null;
+    update.run(newTitle, emp.id);
+  }
+}
+
 // subject_id/teacher_id are additive: the older free-text subject/teacher_name columns stay
 // as the display fallback for entries created before the Classes's Time Table modal existed.
 const TIMETABLE_ENTRY_COLUMNS: [string, string][] = [
@@ -858,6 +884,7 @@ export function seedHrOrgTree(schoolId: number) {
 
 migrateStudentsColumns();
 migrateHrEmployeesColumns();
+migrateTeacherTitlesToDepartmentFormula();
 migrateTimetableEntryColumns();
 migrateDailyPeriodsColumns();
 

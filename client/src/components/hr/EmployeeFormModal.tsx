@@ -18,9 +18,10 @@ import { useHrOrg } from "../../context/HrOrgContext";
 import { useHrEmployees } from "../../context/HrEmployeesContext";
 import { useClasses } from "../../context/ClassesContext";
 import { api, ApiError, assetUrl } from "../../lib/api";
-import type { HrEmployee, HrEmployeeInput, HrLookupItem, HrValuedItem } from "../../lib/types";
+import type { HrEmployee, HrEmployeeInput, HrValuedItem } from "../../lib/types";
 import { isTeacherDivisionName, isPrincipalDivisionName, deriveEmployeeTitle } from "../../lib/hrEmployeeTitle";
 import { useSubjects } from "../../lib/useSubjects";
+import { useLookupOptions } from "../../lib/useLookupOptions";
 import { Section, Field, inputCls } from "../FormLayout";
 import { AddInline } from "../TreeControls";
 
@@ -125,19 +126,6 @@ function initialValues(initial?: HrEmployee | null): Record<TextKey, string> {
     out[key] = raw ?? "";
   }
   return out;
-}
-
-function useLookupOptions(category: string, schoolId: number | null, perSchool = false) {
-  const { token } = useAuth();
-  const [options, setOptions] = useState<HrLookupItem[]>([]);
-  useEffect(() => {
-    if (!token) return;
-    api
-      .getHrLookup(token, category as any, perSchool ? schoolId ?? undefined : undefined)
-      .then((res) => setOptions(res.items))
-      .catch(() => setOptions([]));
-  }, [token, category, schoolId, perSchool]);
-  return options;
 }
 
 function EmployeePhotoField({
@@ -266,6 +254,13 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
   const [staffCredentials, setStaffCredentials] = useState<{ username: string; password: string } | null>(null);
   const [configuringStaffUser, setConfiguringStaffUser] = useState(false);
   const [staffUserError, setStaffUserError] = useState<string | null>(null);
+  // Tracks the employee row this form is actually attached to in the database — starts as
+  // `initial`'s id when editing, and gets set the first time "Configure Staff User" silently
+  // creates a brand-new employee (see handleConfigureStaffUser) so the button works as soon as
+  // a Staff Role is picked, without requiring "Add Employee, then reopen to Edit" first. Once
+  // set, the main Save button also switches to updating this same row in place instead of
+  // asking the parent to create a second, duplicate one.
+  const [savedEmployeeId, setSavedEmployeeId] = useState<number | null>(initial?.id ?? null);
 
   // Leave Balances — one optional numeric field per configured leave type (Configuration >
   // Leaves Balance), keyed by leave_type_id so adding a new type there shows up here too
@@ -280,7 +275,7 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
   // as another one already in this school is almost certainly a double data-entry, not two
   // different people (unlike name alone, which legitimately repeats in this dataset) — so the
   // list is compared against, rather than just relying on the server to reject it.
-  const { employees: schoolEmployees } = useHrEmployees();
+  const { employees: schoolEmployees, refresh: refreshEmployeesList } = useHrEmployees();
   const findDuplicateEmployee = (): HrEmployee | undefined => {
     const trimmedName = nameAr.trim();
     const trimmedId = values.idNumber.trim();
@@ -290,18 +285,18 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
     );
   };
 
-  const countries = useLookupOptions("country", selectedSchoolId);
-  const areas = useLookupOptions("area", selectedSchoolId);
-  const educations = useLookupOptions("education", selectedSchoolId);
-  const universities = useLookupOptions("university", selectedSchoolId);
-  const banks = useLookupOptions("bank", selectedSchoolId);
+  const { options: countries } = useLookupOptions("country", selectedSchoolId);
+  const { options: areas } = useLookupOptions("area", selectedSchoolId);
+  const { options: educations } = useLookupOptions("education", selectedSchoolId);
+  const { options: universities } = useLookupOptions("university", selectedSchoolId);
+  const { options: banks } = useLookupOptions("bank", selectedSchoolId);
   // "Department" primarily lists the Stages from the Student's Affair "My School" hierarchy,
   // plus any extra names added on the fly below via the (global, school-independent)
   // hr_lookup_items "department" catalog — the same catalog category Country/Area/etc. use,
   // just not previously wired up here. `addedDepartments` mirrors what was just created so a
   // brand-new name is immediately selectable without waiting on a refetch.
   const { tree: classTree } = useClasses();
-  const departmentLookups = useLookupOptions("department", selectedSchoolId);
+  const { options: departmentLookups } = useLookupOptions("department", selectedSchoolId);
   const [addedDepartments, setAddedDepartments] = useState<string[]>([]);
   const [addingDepartment, setAddingDepartment] = useState(false);
   const departmentOptions = useMemo(() => {
@@ -322,20 +317,20 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
   const { tree: orgTree } = useHrOrg();
   const orgDivision = orgTree.find((d) => d.division === values.division);
 
-  // Title auto-fills from Division/Section/Department (see deriveEmployeeTitle) but stays a
-  // normal editable field — typing into it directly switches it to "manual" so further Position
+  // Title auto-fills from Division/Department (see deriveEmployeeTitle) but stays a normal
+  // editable field — typing into it directly switches it to "manual" so further Position
   // changes stop overwriting the deliberate override (manualTitle, once set, is used verbatim
   // even if emptied — only "not yet touched" falls back to the live computed value). An
   // existing employee whose saved Title already diverges from what the formula would produce
   // from its own stored fields starts in manual mode too, so simply reopening Edit never
   // silently reverts a manual title back to the computed one.
   const autoTitle = useMemo(
-    () => deriveEmployeeTitle(values.division, values.section, values.department),
-    [values.division, values.section, values.department]
+    () => deriveEmployeeTitle(values.division, values.department),
+    [values.division, values.department]
   );
   const [manualTitle, setManualTitle] = useState<string | null>(() => {
     if (!initial?.title) return null;
-    const computed = deriveEmployeeTitle(initial.division ?? "", initial.section ?? "", initial.department ?? "");
+    const computed = deriveEmployeeTitle(initial.division ?? "", initial.department ?? "");
     return initial.title.trim() !== computed.trim() ? initial.title : null;
   });
   const title = manualTitle ?? autoTitle;
@@ -353,7 +348,7 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
   };
 
   const { token } = useAuth();
-  const subjects = useSubjects();
+  const { subjects } = useSubjects();
   const handleAddDepartment = async (name: string) => {
     if (!token) throw new Error("Not signed in.");
     const res = await api.createHrLookup(token, { category: "department", name });
@@ -436,17 +431,27 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
     form1Date: values.form1Date || undefined,
   });
 
-  // Picking a Staff Role only updates local form state — the server only sees it (and can
-  // only configure a user against it) once the form is actually saved. Saving here first
-  // means clicking this one button works from an unsaved pick, instead of failing with a
-  // confusing "Pick a Staff Role" error for a role that's visibly already selected.
+  // Picking a Staff Role only updates local form state — the server only sees it (and can only
+  // configure a user against it) once the employee row actually exists. Saving here first means
+  // clicking this one button works from an unsaved pick, instead of failing with a confusing
+  // "Pick a Staff Role" error for a role that's visibly already selected — and, for a brand-new
+  // employee that hasn't been saved through the main form yet at all, this silently creates the
+  // row (bypassing the parent's onSubmit, which is wired to close the modal on success) so the
+  // button works the moment a Staff Role is picked, not only after "Add, then reopen to Edit".
   const handleConfigureStaffUser = async () => {
-    if (!token || !initial) return;
+    if (!token) return;
     setConfiguringStaffUser(true);
     setStaffUserError(null);
     try {
-      await api.updateHrEmployee(token, initial.id, buildPayload());
-      const res = await api.configureStaffUser(token, initial.id);
+      let id = savedEmployeeId;
+      if (id == null) {
+        const created = await api.createHrEmployee(token, buildPayload());
+        id = created.employee.id;
+        setSavedEmployeeId(id);
+      } else {
+        await api.updateHrEmployee(token, id, buildPayload());
+      }
+      const res = await api.configureStaffUser(token, id);
       setStaffCredentials({ username: res.username, password: res.password });
       setLinkedUserId(res.employee.linked_user_id);
     } catch (err) {
@@ -474,19 +479,32 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
     setSubmitting(true);
     setError(null);
 
-    try {
-      if (isEdit && initial && token) {
-        for (const [leaveTypeIdStr, val] of Object.entries(leaveBalances)) {
-          if (val.trim() === "") continue;
-          await api.adjustHrLeaveBalance(token, {
-            employeeId: initial.id,
-            schoolId: selectedSchoolId,
-            leaveTypeId: Number(leaveTypeIdStr),
-            targetBalance: Number(val),
-          });
-        }
+    const applyLeaveBalances = async (employeeId: number) => {
+      if (!token) return;
+      for (const [leaveTypeIdStr, val] of Object.entries(leaveBalances)) {
+        if (val.trim() === "") continue;
+        await api.adjustHrLeaveBalance(token, {
+          employeeId,
+          schoolId: selectedSchoolId,
+          leaveTypeId: Number(leaveTypeIdStr),
+          targetBalance: Number(val),
+        });
       }
-      await onSubmit(buildPayload());
+    };
+
+    try {
+      if (!isEdit && savedEmployeeId != null) {
+        // A brand-new employee was silently created mid-session via "Configure Staff User"
+        // (see handleConfigureStaffUser) — update that same row in place instead of calling
+        // the parent's create flow again, which would otherwise insert a duplicate.
+        await applyLeaveBalances(savedEmployeeId);
+        if (token) await api.updateHrEmployee(token, savedEmployeeId, buildPayload());
+        await refreshEmployeesList();
+        onClose();
+      } else {
+        if (isEdit && initial) await applyLeaveBalances(initial.id);
+        await onSubmit(buildPayload());
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not save the employee.");
     } finally {
@@ -785,7 +803,7 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
                 <p className="text-xs text-slate-400">Save the employee first to set leave balances.</p>
               )}
 
-              {values.division === STAFF_DIVISION && staffRole && isEdit && (
+              {values.division === STAFF_DIVISION && staffRole && (
                 <Section title="Staff User Account" icon={Briefcase}>
                   <Field label=" " span={2}>
                     <div className="space-y-2">

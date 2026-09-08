@@ -14,13 +14,13 @@ hrOrgRouter.use(requireModule("hrEmployees"));
 // rename into the matching employee rows in the same transaction as the rename itself.
 function syncEmployeesOnDivisionRename(schoolId: number, oldName: string, newName: string) {
   const affected = db
-    .prepare("SELECT id, section, department FROM hr_employees WHERE school_id = ? AND TRIM(division) = TRIM(?)")
-    .all(schoolId, oldName) as { id: number; section: string | null; department: string | null }[];
+    .prepare("SELECT id, department FROM hr_employees WHERE school_id = ? AND TRIM(division) = TRIM(?)")
+    .all(schoolId, oldName) as { id: number; department: string | null }[];
   if (affected.length === 0) return;
 
   const update = db.prepare("UPDATE hr_employees SET division = ?, title = ? WHERE id = ?");
   for (const emp of affected) {
-    const title = deriveEmployeeTitle(newName, emp.section ?? "", emp.department ?? "") || null;
+    const title = deriveEmployeeTitle(newName, emp.department ?? "") || null;
     update.run(newName, title, emp.id);
   }
 }

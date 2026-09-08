@@ -2,28 +2,18 @@ import { Router } from "express";
 import { db } from "../db";
 import { requireAuth } from "../auth";
 import { requireModule } from "../permissions";
-import { deriveEmployeeTitle } from "../hrEmployeeTitle";
 
 export const subjectsRouter = Router();
 subjectsRouter.use(requireModule("timetable"));
 
 // A Teacher-division employee's hr_employees.section is a plain-text mirror of their assigned
-// subject's name (copied at pick time — see EmployeeFormModal.tsx's setTeacherSubject), and
-// their derived Title embeds that same name (see hrEmployeeTitle.ts's deriveEmployeeTitle).
-// Renaming the subject itself otherwise leaves both stale until the employee is individually
-// reopened and resaved — mirrors the hr_org_divisions rename cascade in hrOrg.ts. `subjects` has
-// no school_id, so every employee referencing this subject_id is in scope regardless of school.
+// subject's name (copied at pick time — see EmployeeFormModal.tsx's setTeacherSubject); Title no
+// longer embeds it (see hrEmployeeTitle.ts's deriveEmployeeTitle — Title is Division+Department
+// now), so renaming a subject only needs to keep that text mirror in sync, not recompute Title.
+// `subjects` has no school_id, so every employee referencing this subject_id is in scope
+// regardless of school.
 function syncEmployeesOnSubjectRename(subjectId: number, newName: string) {
-  const affected = db
-    .prepare("SELECT id, division, department FROM hr_employees WHERE subject_id = ?")
-    .all(subjectId) as { id: number; division: string | null; department: string | null }[];
-  if (affected.length === 0) return;
-
-  const update = db.prepare("UPDATE hr_employees SET section = ?, title = ? WHERE id = ?");
-  for (const emp of affected) {
-    const title = deriveEmployeeTitle(emp.division ?? "", newName, emp.department ?? "") || null;
-    update.run(newName, title, emp.id);
-  }
+  db.prepare("UPDATE hr_employees SET section = ? WHERE subject_id = ?").run(newName, subjectId);
 }
 
 function withLevelIds(subject: any) {

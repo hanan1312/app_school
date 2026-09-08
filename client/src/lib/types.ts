@@ -608,9 +608,12 @@ export type HrOrgSection = {
   jobs: HrOrgJob[];
 };
 
+export type HrOrgDivisionKind = "generic" | "teachers" | "principals";
+
 export type HrOrgDivision = {
   id: number;
   division: string;
+  kind: HrOrgDivisionKind;
   sections: HrOrgSection[];
 };
 

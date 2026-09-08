@@ -506,6 +506,13 @@ export const api = {
 
   deleteHrEmployee: (token: string, id: number) => request<void>(`/hr/employees/${id}`, { method: "DELETE", token }),
 
+  clearHrEmployeeTitles: (token: string, ids: number[]) =>
+    request<{ updated: number }>("/hr/employees/clear-titles", {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+      token,
+    }),
+
   uploadHrEmployeePhoto: async (token: string, employeeId: number, file: File) => {
     const form = new FormData();
     form.append("file", file);
@@ -769,6 +776,13 @@ export const api = {
 
   deleteHrOrgDivision: (token: string, id: number) =>
     request<{ tree: import("./types").HrOrgDivision[] }>(`/hr/org/divisions/${id}`, { method: "DELETE", token }),
+
+  setHrOrgDivisionKind: (token: string, id: number, kind: import("./types").HrOrgDivisionKind) =>
+    request<{ tree: import("./types").HrOrgDivision[] }>(`/hr/org/divisions/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ kind }),
+      token,
+    }),
 
   createHrOrgSection: (token: string, divisionId: number, name: string) =>
     request<{ tree: import("./types").HrOrgDivision[] }>(`/hr/org/divisions/${divisionId}/sections`, {

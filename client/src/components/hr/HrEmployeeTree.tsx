@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Building2, Briefcase, BookOpen, Users, UserSquare2, Plus, Pencil, Trash2, Menu } from "lucide-react";
-import type { HrEmployee, HrOrgDivision, HrOrgSection, Subject } from "../../lib/types";
+import type { HrEmployee, HrOrgDivision, HrOrgDivisionKind, HrOrgSection, Subject } from "../../lib/types";
 import { useHrOrg, type HrOrgSelection } from "../../context/HrOrgContext";
 import { useHrEmployees } from "../../context/HrEmployeesContext";
 import { useSchools } from "../../context/SchoolsContext";
 import { useClasses } from "../../context/ClassesContext";
 import { AddInline, RenameInline, ConfirmDeleteDialog, RowActionButton } from "../TreeControls";
-import { isHeadmasterDivisionName, isTeacherDivisionName, isPrincipalDivisionName, deriveEmployeeTitle } from "../../lib/hrEmployeeTitle";
+import { isHeadmasterDivisionName, deriveEmployeeTitle } from "../../lib/hrEmployeeTitle";
 import { useLookupOptions } from "../../lib/useLookupOptions";
 import { useSubjects } from "../../lib/useSubjects";
 import { api } from "../../lib/api";
@@ -23,6 +23,12 @@ const STAFF_DIVISION = "Staff";
 // the enclosing division/subdivision) already reveals exactly who's in it via the Employees
 // table's selection filter (the same `{type: "title", ...}` HrOrgSelection every other
 // Title-subdivision in this tree already uses), so listing names twice was redundant.
+// Removing a Title group here clears hr_employees.title for exactly the employees shown in it
+// (see api.clearHrEmployeeTitles) — Title isn't a real record, just derived/stored text, so
+// "removing the sub-sub-division" means blanking that text rather than deleting anything. Once
+// blank, EmployeeFormModal's existing "no stored title -> track the live Division+Department
+// formula" behavior takes over: opening Edit on any of these employees shows the recomputed
+// Title immediately, and saving re-persists it, which brings the group right back here in sync.
 function DivisionEmployeeTitles({
   division,
   employees,
@@ -34,33 +40,70 @@ function DivisionEmployeeTitles({
   selection: HrOrgSelection;
   onSelect: (selection: HrOrgSelection) => void;
 }) {
+  const { token } = useAuth();
+  const { refresh: refreshEmployees } = useHrEmployees();
+  const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
+
   if (employees.length === 0) return null;
 
-  const groups = new Map<string, number>();
+  const groups = new Map<string, HrEmployee[]>();
   for (const e of employees) {
     const key = e.title?.trim() || "Untitled";
-    groups.set(key, (groups.get(key) ?? 0) + 1);
+    const list = groups.get(key);
+    if (list) list.push(e);
+    else groups.set(key, [e]);
   }
 
   return (
     <div className="ml-3 border-l border-slate-200 pl-2">
-      {Array.from(groups.entries()).map(([titleLabel, count]) => {
+      {Array.from(groups.entries()).map(([titleLabel, groupEmployees]) => {
         const active = selection.type === "title" && selection.division === division && selection.title === titleLabel;
+        const removable = titleLabel !== "Untitled";
         return (
-          <button
-            key={titleLabel}
-            type="button"
-            onClick={() => onSelect({ type: "title", division, title: titleLabel })}
-            className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left transition ${
-              active ? "bg-gradient-to-r from-brand-50 to-brand-100/60 font-medium text-brand-700 shadow-sm" : "text-slate-600 hover:bg-slate-100"
-            }`}
-          >
-            <UserSquare2 size={12} className={`shrink-0 ${active ? "text-brand-600" : "text-slate-400"}`} />
-            <span className="truncate" dir="rtl">
-              {titleLabel}
-            </span>
-            <span className="ml-auto shrink-0 text-[10px] text-slate-400">{count}</span>
-          </button>
+          <div key={titleLabel} className="group flex items-center rounded-md">
+            <button
+              type="button"
+              onClick={() => onSelect({ type: "title", division, title: titleLabel })}
+              className={`flex flex-1 items-center gap-1.5 rounded-md px-2 py-1 text-left transition ${
+                active ? "bg-gradient-to-r from-brand-50 to-brand-100/60 font-medium text-brand-700 shadow-sm" : "text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              <UserSquare2 size={12} className={`shrink-0 ${active ? "text-brand-600" : "text-slate-400"}`} />
+              <span className="truncate" dir="rtl">
+                {titleLabel}
+              </span>
+              <span className="ml-auto shrink-0 text-[10px] text-slate-400">{groupEmployees.length}</span>
+            </button>
+            {removable && (
+              <RowActionButton
+                title="Remove this title group from the panel"
+                variant="danger"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setConfirmingDelete(titleLabel);
+                }}
+              >
+                <Trash2 size={11} />
+              </RowActionButton>
+            )}
+            {confirmingDelete === titleLabel && (
+              <ConfirmDeleteDialog
+                title="Remove title from panel?"
+                message={`"${titleLabel}" will be cleared for ${groupEmployees.length} employee(s). Their Division/Department stay unchanged — reopening and saving any of them regenerates and re-syncs it here automatically.`}
+                onCancel={() => setConfirmingDelete(null)}
+                onConfirm={async () => {
+                  if (!token) return;
+                  await api.clearHrEmployeeTitles(
+                    token,
+                    groupEmployees.map((e) => e.id)
+                  );
+                  await refreshEmployees();
+                  if (active) onSelect({ type: "division", division });
+                  setConfirmingDelete(null);
+                }}
+              />
+            )}
+          </div>
         );
       })}
     </div>
@@ -520,15 +563,19 @@ function DivisionRow({
   selection: HrOrgSelection;
   onSelect: (selection: HrOrgSelection) => void;
 }) {
-  const { createSection, renameDivision, deleteDivision } = useHrOrg();
+  const { createSection, renameDivision, setDivisionKind, deleteDivision } = useHrOrg();
   const { refresh: refreshEmployees } = useHrEmployees();
   const [open, setOpen] = useState(true);
   const [addingSection, setAddingSection] = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const active = selection.type === "division" && selection.division === division.division;
-  const isTeacherDiv = isTeacherDivisionName(division.division);
-  const isPrincipalDiv = isPrincipalDivisionName(division.division);
+  // Whether this division gets Subject-based (Teachers) or Department-based (Principals)
+  // subdivisions is this explicit, persisted `kind` flag rather than name-matching — see the
+  // grouping <select> below, which is how a renamed division (e.g. one that no longer literally
+  // says "Teachers") gets flipped back into the right shape.
+  const isTeacherDiv = division.kind === "teachers";
+  const isPrincipalDiv = division.kind === "principals";
   // Teachers (Subject-subdivisions) and Principals (Department-subdivisions) both skip the
   // manageable Section/Job tree entirely — see the comments on TeacherSubjectRow and
   // TitleSubdivisionRow above.
@@ -599,6 +646,17 @@ function DivisionRow({
             {division.division}
           </span>
         </button>
+        <select
+          value={division.kind}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => setDivisionKind(division.id, e.target.value as HrOrgDivisionKind)}
+          title="Division grouping — Teachers syncs sub-divisions with Time Table Subjects, Principals syncs them with Departments"
+          className="shrink-0 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-[10px] text-slate-400 opacity-0 outline-none transition hover:border-slate-200 hover:bg-slate-50 hover:text-slate-600 focus:opacity-100 group-hover:opacity-100"
+        >
+          <option value="generic">Generic</option>
+          <option value="teachers">Teachers</option>
+          <option value="principals">Principals</option>
+        </select>
         {!usesDepartmentSubdivisions && (
           <RowActionButton
             title={`Add section in ${division.division}`}

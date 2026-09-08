@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db } from "../db";
 import { requireAuth } from "../auth";
+import { syncEmployeesOnDepartmentRename } from "../hrEmployeeTitle";
 
 export const classesRouter = Router();
 
@@ -85,7 +86,7 @@ classesRouter.put("/stages/:stageId", requireAuth, (req, res) => {
   const name = (req.body?.name ?? "").trim();
   if (!name) return res.status(400).json({ error: "Stage name is required" });
 
-  const stage = db.prepare("SELECT id FROM stages WHERE id = ?").get(stageId);
+  const stage = db.prepare("SELECT id, name FROM stages WHERE id = ?").get(stageId) as { id: number; name: string } | undefined;
   if (!stage) return res.status(404).json({ error: "Stage not found" });
 
   const tx = db.transaction(() => {
@@ -93,6 +94,9 @@ classesRouter.put("/stages/:stageId", requireAuth, (req, res) => {
     db.prepare(
       "UPDATE classes SET stage_label = ? WHERE level_id IN (SELECT id FROM levels WHERE stage_id = ?)"
     ).run(name, stageId);
+    if (stage.name.trim() !== name.trim()) {
+      syncEmployeesOnDepartmentRename(db, stage.name, name);
+    }
   });
   tx();
 

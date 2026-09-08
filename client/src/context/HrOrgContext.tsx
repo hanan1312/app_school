@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { api } from "../lib/api";
 import { useAuth } from "./AuthContext";
 import { useSchools } from "./SchoolsContext";
-import type { HrOrgDivision } from "../lib/types";
+import type { HrOrgDivision, HrOrgDivisionKind } from "../lib/types";
 
 export type HrOrgSelection =
   | { type: "all" }
@@ -18,6 +18,7 @@ type HrOrgContextValue = {
   setSelection: (selection: HrOrgSelection) => void;
   createDivision: (name: string) => Promise<void>;
   renameDivision: (id: number, name: string) => Promise<void>;
+  setDivisionKind: (id: number, kind: HrOrgDivisionKind) => Promise<void>;
   deleteDivision: (id: number) => Promise<void>;
   createSection: (divisionId: number, name: string) => Promise<void>;
   renameSection: (id: number, name: string) => Promise<void>;
@@ -67,6 +68,12 @@ export function HrOrgProvider({ children }: { children: ReactNode }) {
   const renameDivision = async (id: number, name: string) => {
     if (!token) return;
     const res = await api.renameHrOrgDivision(token, id, name);
+    setTree(res.tree);
+  };
+
+  const setDivisionKind = async (id: number, kind: HrOrgDivisionKind) => {
+    if (!token) return;
+    const res = await api.setHrOrgDivisionKind(token, id, kind);
     setTree(res.tree);
   };
 
@@ -122,6 +129,7 @@ export function HrOrgProvider({ children }: { children: ReactNode }) {
     setSelection,
     createDivision,
     renameDivision,
+    setDivisionKind,
     deleteDivision,
     createSection,
     renameSection,

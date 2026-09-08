@@ -312,10 +312,13 @@ export default function EmployeeFormModal({ initial, onClose, onSubmit }: Props)
   // real subjects.id FK, persisted as hr_employees.subject_id) — the Classes's Time Table
   // cell editor matches teachers to a subject by that id, not by comparing name strings, so
   // renames/casing/Arabic-vs-English naming can never break the match.
-  const isTeacherDivision = isTeacherDivisionName(values.division);
-  const isPrincipalDivision = isPrincipalDivisionName(values.division);
   const { tree: orgTree } = useHrOrg();
   const orgDivision = orgTree.find((d) => d.division === values.division);
+  // A real org-tree division carries an explicit, user-editable `kind` (see the HR sidebar
+  // tree's grouping selector) — that's the source of truth now. Name-matching survives only as
+  // a fallback for the synthetic "Staff" option, which has no real hr_org_divisions row.
+  const isTeacherDivision = orgDivision ? orgDivision.kind === "teachers" : isTeacherDivisionName(values.division);
+  const isPrincipalDivision = orgDivision ? orgDivision.kind === "principals" : isPrincipalDivisionName(values.division);
 
   // Title auto-fills from Division/Department (see deriveEmployeeTitle) but stays a normal
   // editable field — typing into it directly switches it to "manual" so further Position

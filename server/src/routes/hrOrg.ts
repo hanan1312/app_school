@@ -31,6 +31,20 @@ function syncEmployeesOnSectionRename(schoolId: number, divisionName: string, ol
   ).run(newName, schoolId, divisionName, oldName);
 }
 
+// One-time reconciliation for a division just switched to kind "teachers": employees already in
+// it typically have Section text (set via the old plain hr_org_sections picker) that happens to
+// match a real Time Table Subjects name — link those up by subject_id immediately instead of
+// requiring every employee to be individually reopened and resaved through the new Subject picker.
+function backfillSubjectIdsForDivision(schoolId: number, divisionName: string) {
+  db.prepare(
+    `UPDATE hr_employees
+     SET subject_id = (SELECT id FROM subjects WHERE TRIM(subjects.name) = TRIM(hr_employees.section))
+     WHERE school_id = ? AND TRIM(division) = TRIM(?) AND subject_id IS NULL
+       AND section IS NOT NULL AND TRIM(section) != ''
+       AND EXISTS (SELECT 1 FROM subjects WHERE TRIM(subjects.name) = TRIM(hr_employees.section))`
+  ).run(schoolId, divisionName);
+}
+
 function syncEmployeesOnJobRename(
   schoolId: number,
   divisionName: string,
@@ -69,6 +83,7 @@ function buildTreeResponse(schoolId: number) {
   const tree = divisions.map((division) => ({
     id: division.id,
     division: division.name,
+    kind: division.kind ?? "generic",
     sections: sections
       .filter((s) => s.division_id === division.id)
       .map((section) => ({
@@ -106,18 +121,31 @@ hrOrgRouter.post("/divisions", requireAuth, (req, res) => {
   res.status(201).json(buildTreeResponse(Number(schoolId)));
 });
 
+const VALID_DIVISION_KINDS = new Set(["generic", "teachers", "principals"]);
+
 hrOrgRouter.put("/divisions/:id", requireAuth, (req, res) => {
   const id = Number(req.params.id);
-  const name = (req.body?.name ?? "").trim();
-  if (!name) return res.status(400).json({ error: "Division name is required" });
-
   const division = db.prepare("SELECT * FROM hr_org_divisions WHERE id = ?").get(id) as any;
   if (!division) return res.status(404).json({ error: "Division not found" });
 
+  const body = req.body ?? {};
+  const hasName = typeof body.name === "string";
+  const name = hasName ? body.name.trim() : division.name;
+  if (hasName && !name) return res.status(400).json({ error: "Division name is required" });
+
+  const hasKind = typeof body.kind === "string";
+  if (hasKind && !VALID_DIVISION_KINDS.has(body.kind)) {
+    return res.status(400).json({ error: "Invalid division kind" });
+  }
+  const kind = hasKind ? body.kind : division.kind;
+
   const tx = db.transaction(() => {
-    db.prepare("UPDATE hr_org_divisions SET name = ? WHERE id = ?").run(name, id);
+    db.prepare("UPDATE hr_org_divisions SET name = ?, kind = ? WHERE id = ?").run(name, kind, id);
     if (division.name.trim() !== name.trim()) {
       syncEmployeesOnDivisionRename(division.school_id, division.name, name);
+    }
+    if (hasKind && division.kind !== "teachers" && kind === "teachers") {
+      backfillSubjectIdsForDivision(division.school_id, name);
     }
   });
   tx();

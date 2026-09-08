@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import path from "path";
 import { masterAccount } from "./masterAccount";
-import { isTeacherDivisionName, deriveEmployeeTitle } from "./hrEmployeeTitle";
+import { isTeacherDivisionName, isPrincipalDivisionName, deriveEmployeeTitle } from "./hrEmployeeTitle";
 
 const dbPath = path.join(__dirname, "..", "school.db");
 export const db = new Database(dbPath);
@@ -616,6 +616,29 @@ function migrateDailyPeriodsColumns() {
   }
 }
 
+// hr_org_divisions.kind ("generic" | "teachers" | "principals") replaces name-only detection
+// (isTeacherDivisionName/isPrincipalDivisionName) as the source of truth for whether a division
+// gets Subject-based (Teachers) or Department-based (Principals) subdivisions in the HR sidebar
+// tree and the Position tab — a school that renames one of these divisions away from the seeded
+// name (as this deployment did: "المدرسين" -> "مدرس اول", "الوكلاء" -> "وكيل") no longer silently
+// loses that behavior; instead it's an explicit, editable per-division flag. The backfill below
+// only ever runs once (guarded by the column not existing yet), classifying existing divisions
+// by the same name-matching the app already used, so nothing changes for a school that never
+// renamed these divisions.
+function migrateHrOrgDivisionColumns() {
+  const existing = (db.prepare("PRAGMA table_info(hr_org_divisions)").all() as { name: string }[]).map((c) => c.name);
+  if (existing.includes("kind")) return;
+
+  db.exec("ALTER TABLE hr_org_divisions ADD COLUMN kind TEXT NOT NULL DEFAULT 'generic'");
+
+  const rows = db.prepare("SELECT id, name FROM hr_org_divisions").all() as { id: number; name: string }[];
+  const update = db.prepare("UPDATE hr_org_divisions SET kind = ? WHERE id = ?");
+  for (const row of rows) {
+    if (isTeacherDivisionName(row.name)) update.run("teachers", row.id);
+    else if (isPrincipalDivisionName(row.name)) update.run("principals", row.id);
+  }
+}
+
 function migrateClassHierarchy() {
   const classColumns = (db.prepare("PRAGMA table_info(classes)").all() as { name: string }[]).map((c) => c.name);
   if (!classColumns.includes("level_id")) {
@@ -835,12 +858,13 @@ function seedSchools() {
   seedHrOrgTree(Number(info.lastInsertRowid));
 }
 
-type OrgSeed = { division: string; sections: { section: string; job: string }[] };
+type OrgSeed = { division: string; kind?: "teachers" | "principals"; sections: { section: string; job: string }[] };
 
 const HR_ORG_TREE: OrgSeed[] = [
   { division: "مدير المدرسة", sections: [{ section: "مدير إدارة المدرسة", job: "مدير إدارة المدرسة" }] },
   {
     division: "الوكلاء",
+    kind: "principals",
     sections: [
       { section: "وكيل المرحلة الثانوى", job: "وكيل ثانوى" },
       { section: "وكيل المرحلة الاعدادى", job: "وكيل اعدادى" },
@@ -850,6 +874,7 @@ const HR_ORG_TREE: OrgSeed[] = [
   },
   {
     division: "المدرسين",
+    kind: "teachers",
     sections: [
       { section: "مادة التربية الدينية", job: "مدرس تربية دينية" },
       { section: "مادة الرياضيات", job: "مدرس رياضيات" },
@@ -868,12 +893,14 @@ const HR_ORG_TREE: OrgSeed[] = [
 // newly-created school, so there's something sensible to start editing from — exported so
 // server/src/routes/schools.ts can call it too when a new school is added.
 export function seedHrOrgTree(schoolId: number) {
-  const insertDivision = db.prepare("INSERT INTO hr_org_divisions (school_id, name, sort_order) VALUES (?, ?, ?)");
+  const insertDivision = db.prepare(
+    "INSERT INTO hr_org_divisions (school_id, name, sort_order, kind) VALUES (?, ?, ?, ?)"
+  );
   const insertSection = db.prepare("INSERT INTO hr_org_sections (division_id, name, sort_order) VALUES (?, ?, ?)");
   const insertJob = db.prepare("INSERT INTO hr_org_jobs (section_id, name, sort_order) VALUES (?, ?, ?)");
 
   HR_ORG_TREE.forEach((divisionSeed, divisionOrder) => {
-    const divisionInfo = insertDivision.run(schoolId, divisionSeed.division, divisionOrder);
+    const divisionInfo = insertDivision.run(schoolId, divisionSeed.division, divisionOrder, divisionSeed.kind ?? "generic");
     const divisionId = Number(divisionInfo.lastInsertRowid);
     divisionSeed.sections.forEach((sectionSeed, sectionOrder) => {
       const sectionInfo = insertSection.run(divisionId, sectionSeed.section, sectionOrder);
@@ -887,6 +914,7 @@ migrateHrEmployeesColumns();
 migrateTeacherTitlesToDepartmentFormula();
 migrateTimetableEntryColumns();
 migrateDailyPeriodsColumns();
+migrateHrOrgDivisionColumns();
 
 seedClasses();
 migrateClassHierarchy();

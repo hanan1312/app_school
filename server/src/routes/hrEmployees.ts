@@ -201,6 +201,26 @@ hrEmployeesRouter.put("/:id", requireAuth, (req, res) => {
   res.json({ employee });
 });
 
+// Clears the stored Title for exactly the given employee ids — used by the HR sidebar tree's
+// "remove this Title group from the panel" action. ID-based rather than a division+title text
+// match: Title has no Subject dependency, so a text match could clear employees under a
+// *different* Subject who simply happen to share the same derived Title. Clearing (not deleting
+// the employee, and not touching division/section/department) leaves EmployeeFormModal's
+// existing "blank title tracks the live formula" behavior to regenerate and re-sync it the next
+// time that employee is opened and saved.
+hrEmployeesRouter.post("/clear-titles", requireAuth, (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter((n: number) => Number.isInteger(n)) : [];
+  if (ids.length === 0) return res.status(400).json({ error: "ids is required" });
+
+  const update = db.prepare("UPDATE hr_employees SET title = '' WHERE id = ?");
+  const tx = db.transaction((employeeIds: number[]) => {
+    for (const id of employeeIds) update.run(id);
+  });
+  tx(ids);
+
+  res.json({ updated: ids.length });
+});
+
 function toCamel(snake: string): string {
   return snake.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
 }

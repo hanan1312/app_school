@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "../db";
 import { requireAuth } from "../auth";
 import { requireModule } from "../permissions";
+import { syncEmployeesOnDepartmentRename } from "../hrEmployeeTitle";
 
 export const hrConfigurationRouter = Router();
 hrConfigurationRouter.use(requireModule("hrConfiguration"));
@@ -79,11 +80,14 @@ hrConfigurationRouter.put("/lookup/:id", requireAuth, (req, res) => {
   if (!existing) return res.status(404).json({ error: "Item not found" });
 
   const b = req.body ?? {};
-  db.prepare("UPDATE hr_lookup_items SET name = ?, note = ? WHERE id = ?").run(
-    b.name ?? existing.name,
-    b.note ?? existing.note,
-    id
-  );
+  const newName = b.name ?? existing.name;
+  const tx = db.transaction(() => {
+    db.prepare("UPDATE hr_lookup_items SET name = ?, note = ? WHERE id = ?").run(newName, b.note ?? existing.note, id);
+    if (existing.category === "department" && existing.name.trim() !== String(newName).trim()) {
+      syncEmployeesOnDepartmentRename(db, existing.name, newName);
+    }
+  });
+  tx();
 
   const item = db.prepare("SELECT * FROM hr_lookup_items WHERE id = ?").get(id);
   res.json({ item });

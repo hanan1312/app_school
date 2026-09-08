@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useMemo, useState, type DragEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, Settings2, Trash2 } from "lucide-react";
+import { ChevronDown, GripVertical, Settings2, Trash2 } from "lucide-react";
 import type { HrEmployee } from "../../lib/types";
 import {
   HR_EMPLOYEE_COLUMNS,
@@ -8,8 +8,15 @@ import {
   type HrEmployeeColumnKey,
 } from "../../lib/hrEmployeeColumns";
 import { useColumnFilters } from "../../lib/useColumnFilters";
-import ManageColumnsModal, { loadVisibleColumnKeys, saveVisibleColumnKeys } from "../ManageColumnsModal";
+import ManageColumnsModal, {
+  loadVisibleColumnKeys,
+  saveVisibleColumnKeys,
+  loadColumnOrder,
+  saveColumnOrder,
+} from "../ManageColumnsModal";
 import ColumnFilterMenu from "../ColumnFilterMenu";
+
+const DEFAULT_COLUMN_ORDER = HR_EMPLOYEE_COLUMNS.map((c) => c.key);
 
 // One shared employees table — columns, per-column filters and row-click-to-edit — reused by
 // both the main HR Employees grid and Management's Staff-only view, so the two stay in sync
@@ -31,21 +38,58 @@ export default function HrEmployeeTable({
   const [visibleKeys, setVisibleKeys] = useState<HrEmployeeColumnKey[]>(() =>
     loadVisibleColumnKeys(storageKey, DEFAULT_VISIBLE_HR_EMPLOYEE_COLUMNS)
   );
+  const [columnOrder, setColumnOrder] = useState<HrEmployeeColumnKey[]>(() =>
+    loadColumnOrder(storageKey, DEFAULT_COLUMN_ORDER)
+  );
+  const [draggedKey, setDraggedKey] = useState<HrEmployeeColumnKey | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<HrEmployeeColumnKey | null>(null);
   const [openFilterKey, setOpenFilterKey] = useState<HrEmployeeColumnKey | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
 
   useEffect(() => saveVisibleColumnKeys(storageKey, visibleKeys), [storageKey, visibleKeys]);
+  useEffect(() => saveColumnOrder(storageKey, columnOrder), [storageKey, columnOrder]);
 
   const visibleColumnSet = useMemo(() => new Set(visibleKeys), [visibleKeys]);
+  const columnMap = useMemo(() => new Map(HR_EMPLOYEE_COLUMNS.map((c) => [c.key, c])), []);
   const orderedVisibleColumns = useMemo(
-    () => HR_EMPLOYEE_COLUMNS.filter((c) => visibleColumnSet.has(c.key)),
-    [visibleColumnSet]
+    () => columnOrder.map((k) => columnMap.get(k)).filter((c): c is (typeof HR_EMPLOYEE_COLUMNS)[number] => !!c && visibleColumnSet.has(c.key)),
+    [columnOrder, columnMap, visibleColumnSet]
   );
   const toggleColumn = (key: HrEmployeeColumnKey) =>
     setVisibleKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
-  const resetColumns = () => setVisibleKeys(DEFAULT_VISIBLE_HR_EMPLOYEE_COLUMNS);
-
-  const columnMap = useMemo(() => new Map(HR_EMPLOYEE_COLUMNS.map((c) => [c.key, c])), []);
+  const resetColumns = () => {
+    setVisibleKeys(DEFAULT_VISIBLE_HR_EMPLOYEE_COLUMNS);
+    setColumnOrder(DEFAULT_COLUMN_ORDER);
+  };
+  // Drag a header to reorder columns — drop position becomes the dragged column's new slot.
+  const moveColumn = (dragKey: HrEmployeeColumnKey, dropKey: HrEmployeeColumnKey) => {
+    if (dragKey === dropKey) return;
+    setColumnOrder((prev) => {
+      const next = prev.filter((k) => k !== dragKey);
+      const dropIndex = next.indexOf(dropKey);
+      next.splice(dropIndex, 0, dragKey);
+      return next;
+    });
+  };
+  const handleColumnDragStart = (key: HrEmployeeColumnKey) => (e: DragEvent<HTMLTableCellElement>) => {
+    setDraggedKey(key);
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handleColumnDragOver = (key: HrEmployeeColumnKey) => (e: DragEvent<HTMLTableCellElement>) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (draggedKey && draggedKey !== key) setDragOverKey(key);
+  };
+  const handleColumnDrop = (key: HrEmployeeColumnKey) => (e: DragEvent<HTMLTableCellElement>) => {
+    e.preventDefault();
+    if (draggedKey) moveColumn(draggedKey, key);
+    setDraggedKey(null);
+    setDragOverKey(null);
+  };
+  const handleColumnDragEnd = () => {
+    setDraggedKey(null);
+    setDragOverKey(null);
+  };
   const getValue = (e: HrEmployee, key: HrEmployeeColumnKey) => columnMap.get(key)?.get(e) ?? "";
   const { filteredRows, optionsFor, setFilter, hasFilter, columnFilters } = useColumnFilters(employees, getValue);
 
@@ -89,18 +133,31 @@ export default function HrEmployeeTable({
             <tr>
               <th className="px-3 py-2">#</th>
               {orderedVisibleColumns.map((col) => (
-                <th key={col.key} className="whitespace-nowrap px-3 py-2">
-                  <button
-                    type="button"
-                    data-col-filter-trigger
-                    onClick={(e) => handleHeaderClick(col.key, e)}
-                    className={`-mx-1 flex items-center gap-1 rounded px-1 py-0.5 uppercase transition hover:bg-slate-100 ${
-                      hasFilter(col.key) ? "text-brand-700" : ""
-                    }`}
-                  >
-                    {col.label}
-                    <ChevronDown size={12} className={hasFilter(col.key) ? "text-brand-600" : "text-slate-400"} />
-                  </button>
+                <th
+                  key={col.key}
+                  draggable
+                  onDragStart={handleColumnDragStart(col.key)}
+                  onDragOver={handleColumnDragOver(col.key)}
+                  onDrop={handleColumnDrop(col.key)}
+                  onDragEnd={handleColumnDragEnd}
+                  className={`whitespace-nowrap px-3 py-2 transition ${draggedKey === col.key ? "opacity-40" : ""} ${
+                    dragOverKey === col.key ? "bg-brand-50" : ""
+                  }`}
+                >
+                  <div className="flex items-center gap-1">
+                    <GripVertical size={12} className="shrink-0 cursor-grab text-slate-300 active:cursor-grabbing" />
+                    <button
+                      type="button"
+                      data-col-filter-trigger
+                      onClick={(e) => handleHeaderClick(col.key, e)}
+                      className={`-mx-1 flex items-center gap-1 rounded px-1 py-0.5 uppercase transition hover:bg-slate-100 ${
+                        hasFilter(col.key) ? "text-brand-700" : ""
+                      }`}
+                    >
+                      {col.label}
+                      <ChevronDown size={12} className={hasFilter(col.key) ? "text-brand-600" : "text-slate-400"} />
+                    </button>
+                  </div>
                 </th>
               ))}
               {onDelete && <th className="px-3 py-2" />}

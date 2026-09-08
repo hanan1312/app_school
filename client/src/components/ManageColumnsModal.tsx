@@ -94,3 +94,30 @@ export function saveVisibleColumnKeys<K extends string>(storageKey: string, keys
     /* ignore */
   }
 }
+
+// Persists a full left-to-right column order (drag-to-reorder), separately from which columns
+// are visible. `defaultOrder` also acts as the allowlist: any stored key no longer known is
+// dropped, and any known key missing from storage (e.g. a newly added column) is appended at
+// the end rather than silently disappearing.
+export function loadColumnOrder<K extends string>(storageKey: string, defaultOrder: K[]): K[] {
+  try {
+    const raw = localStorage.getItem(`${storageKey}:order`);
+    if (!raw) return defaultOrder;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return defaultOrder;
+    const known = new Set(defaultOrder);
+    const ordered = parsed.filter((k): k is K => known.has(k));
+    const missing = defaultOrder.filter((k) => !ordered.includes(k));
+    return [...ordered, ...missing];
+  } catch {
+    return defaultOrder;
+  }
+}
+
+export function saveColumnOrder<K extends string>(storageKey: string, order: K[]) {
+  try {
+    localStorage.setItem(`${storageKey}:order`, JSON.stringify(order));
+  } catch {
+    /* ignore */
+  }
+}
